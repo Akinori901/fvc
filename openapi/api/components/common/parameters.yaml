@@ -1,0 +1,52 @@
+components:
+  parameters:
+    # -------------------------------------------------------------------------- *
+    # ヘッダーパラメータ
+    # -------------------------------------------------------------------------- *
+    AcceptHeader:
+      name: Accept
+      in: header
+      required: false
+      schema:
+        type: string
+        default: application/json
+        example: application/json
+      description: レスポンス形式を指定
+
+    # -------------------------------------------------------------------------- *
+    # クエリパラメータ
+    # -------------------------------------------------------------------------- *
+    PageQuery:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+        example: 1
+      description: ページ番号
+
+    PageSizeQuery:
+      name: page_size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+        example: 20
+      description: 1ページあたりの件数
+
+    # -------------------------------------------------------------------------- *
+    # パスパラメータ
+    # -------------------------------------------------------------------------- *
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        example: 1
+      description: リソースID

@@ -1,0 +1,26 @@
+# =============================================================================
+# 本番用 Dockerfile — AWS Lambda コンテナイメージ
+# =============================================================================
+
+FROM public.ecr.aws/lambda/python:3.13
+
+# mysqlclient ビルドに必要なシステム依存
+RUN dnf install -y gcc mariadb105-devel pkgconfig && dnf clean all
+
+# uv インストール
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# 依存インストール（キャッシュ活用のため先にコピー）
+COPY backend/pyproject.toml ${LAMBDA_TASK_ROOT}/
+WORKDIR ${LAMBDA_TASK_ROOT}
+RUN uv pip install --system --no-cache -r pyproject.toml
+
+# アプリケーションコードをコピー
+COPY backend/ ${LAMBDA_TASK_ROOT}/
+
+# OpenAPI 仕様（ChatGPT Custom GPT Actions などからの取得用）を Lambda 内に同梱。
+# McpOpenApiView は ${LAMBDA_TASK_ROOT}/openapi/api/paths/mcp_tools.yaml を読みに来る。
+COPY openapi/ ${LAMBDA_TASK_ROOT}/openapi/
+
+# Lambda ハンドラ（Mangum 経由で Django ASGI を実行）
+CMD ["config.asgi.handler"]

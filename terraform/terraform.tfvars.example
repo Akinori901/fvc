@@ -1,0 +1,25 @@
+# Copy this file to terraform.tfvars and fill in actual values
+# terraform.tfvars is gitignored -- DO NOT commit it
+
+aws_region        = "ap-northeast-1"
+project_name      = "fvc"
+db_name           = "fair_value_calculator"
+db_username       = "fvc_admin"
+db_password       = "CHANGE_ME_TO_STRONG_PASSWORD"
+django_secret_key = "CHANGE_ME_TO_RANDOM_STRING"
+s3_bucket_name    = "fvc-bucket"
+
+# Basic Auth (CloudFront)
+basic_auth_user = "CHANGE_ME"
+basic_auth_pass = "CHANGE_ME"
+
+# Google OAuth (Cognito Identity Provider)
+# Google Cloud Console > APIs & Services > Credentials > OAuth 2.0 Client ID
+# 承認済みリダイレクト URI:
+#   https://fvc-prod.auth.ap-northeast-1.amazoncognito.com/oauth2/idpresponse
+google_oauth_client_id     = "CHANGE_ME.apps.googleusercontent.com"
+google_oauth_client_secret = "GOCSPX-CHANGE_ME"
+
+# Cognito 招待メール本文に埋め込むログイン URL
+# 例: https://d1234abcdef.cloudfront.net/login
+app_login_url = "https://CHANGE_ME.cloudfront.net/login"

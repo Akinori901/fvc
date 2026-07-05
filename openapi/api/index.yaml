@@ -1,0 +1,40 @@
+openapi: 3.0.3
+info:
+  title: Fair Value Calculator API
+  version: 1.0.0
+  description: |
+    成長率と純資産から適正PBRを算出し、現在の株価と比較して割安か否かを判断するAPI。
+  contact:
+    name: Fair Value Calculator
+  license:
+    name: MIT License
+    url: "https://opensource.org/licenses/MIT"
+
+tags:
+  # ------------------------------------------------------------
+  # 共通
+  # ------------------------------------------------------------
+  - name: Common | health
+    description: ヘルスチェック系のエンドポイント群
+
+  # ------------------------------------------------------------
+  # 銘柄管理
+  # ------------------------------------------------------------
+  - name: Stocks | 銘柄管理
+    description: 銘柄マスタの参照・検索
+
+  # ------------------------------------------------------------
+  # 適正価格算出
+  # ------------------------------------------------------------
+  - name: Valuations | 適正価格算出
+    description: 適正PBR・適正株価の算出・参照
+
+servers:
+  - url: http://localhost:18000/
+    description: ローカル開発環境
+
+paths: {}
+  # エンドポイント追加時にここへ $ref で定義する
+  # 例:
+  # /api/v1/stocks/:
+  #   $ref: "./paths/v1/stocks/list.yaml"
