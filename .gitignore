@@ -1,0 +1,87 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# uv
+backend/.python-version
+
+# Django
+backend/staticfiles/
+backend/media/
+*.sqlite3
+backend/db.sqlite3
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+.envrc
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Images
+*.png
+*.jpg
+*.jpeg
+
+# Docker
+docker/mysql/data/
+
+# Logs
+*.log
+
+# Coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# node
+frontend/node_modules/
+frontend/.vite/
+
+# mypy
+.mypy_cache/
+
+# ruff
+.ruff_cache/
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/*.tfvars
+terraform/.terraform.lock.hcl
+
+# AI Agent
+.claude/*.md
+.claude/*.md
+.claude/settings.local.json
+.cursor/*.md
+.cursor/mcp.json
+
+# Docs
+docs/mcp/backlog-wiki/

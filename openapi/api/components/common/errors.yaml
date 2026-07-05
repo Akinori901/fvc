@@ -1,0 +1,64 @@
+components:
+  responses:
+    # -------------------------------------------------------------------------- *
+    # 400 Bad Request
+    # -------------------------------------------------------------------------- *
+    BadRequestError:
+      description: リクエストが不正
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Bad request"
+
+    # -------------------------------------------------------------------------- *
+    # 404 Not Found
+    # -------------------------------------------------------------------------- *
+    NotFoundError:
+      description: リソースが見つからない
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Not found."
+
+    # -------------------------------------------------------------------------- *
+    # 422 Validation Error
+    # -------------------------------------------------------------------------- *
+    ValidationError:
+      description: バリデーションエラー
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              field_name:
+                type: array
+                items:
+                  type: string
+                example:
+                  - "This field is required."
+            additionalProperties:
+              type: array
+              items:
+                type: string
+
+    # -------------------------------------------------------------------------- *
+    # 500 Internal Server Error
+    # -------------------------------------------------------------------------- *
+    InternalServerError:
+      description: サーバー内部エラー
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Internal server error."

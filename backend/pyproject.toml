@@ -1,0 +1,103 @@
+[project]
+name = "fair-value-calculator"
+version = "0.1.0"
+description = "成長率と純資産から適正PBRを算出し、株価の割安判定を行うツール"
+requires-python = ">=3.13"
+dependencies = [
+    "django>=6.0,<7.0",
+    "djangorestframework>=3.16,<4.0",
+    "django-cors-headers>=4.6,<5.0",
+    "django-environ>=0.12,<1.0",
+    "mysqlclient>=2.2,<3.0",
+    "mangum>=0.19,<1.0",
+    "httpx>=0.28,<1.0",
+    "yfinance>=0.2,<1.0",
+    "tenacity>=8.2,<9.0",
+    "jquants-api-client>=2.0,<3.0",
+    "feedparser>=6.0.10,<7.0",
+    "mcp>=1.0,<2.0",
+    "bcrypt>=4.0,<5.0",
+    "pyjwt[crypto]>=2.9,<3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.9,<1.0",
+    "mypy>=1.14,<2.0",
+    "django-stubs>=5.1,<6.0",
+    "djangorestframework-stubs>=3.15,<4.0",
+    "pytest>=8.3,<9.0",
+    "pytest-django>=4.9,<5.0",
+    "pytest-cov>=6.0,<7.0",
+    "factory-boy>=3.3,<4.0",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+src = ["."]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "TCH"]
+
+[tool.ruff.lint.per-file-ignores]
+# Django auto-generated migrations: ignore line-length and import ordering
+"**/migrations/*.py" = ["E501", "I001"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "config"]
+
+[tool.mypy]
+python_version = "3.13"
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+exclude = ["migrations/"]
+
+[[tool.mypy.overrides]]
+module = [
+    "environ",
+    "environ.*",
+    "yfinance",
+    "yfinance.*",
+    "jquantsapi",
+    "jquantsapi.*",
+    "pandas",
+    "pandas.*",
+    "mangum",
+    "mangum.*",
+    "boto3",
+    "boto3.*",
+    "feedparser",
+    "feedparser.*",
+    "mcp",
+    "mcp.*",
+    "bcrypt",
+    "bcrypt.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "apps.stocks.infrastructure.external.jquants_client",
+    "apps.stocks.infrastructure.external.yfinance_client",
+]
+disallow_untyped_calls = false
+
+[[tool.mypy.overrides]]
+module = [
+    "config.settings.*",
+    "config.management_handler",
+]
+disallow_untyped_calls = false
+
+[tool.django-stubs]
+django_settings_module = "config.settings.development"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.testing"
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"

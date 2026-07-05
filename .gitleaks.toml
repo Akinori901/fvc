@@ -1,0 +1,15 @@
+# gitleaks 設定（公開ミラーワークフローのシークレットスキャンで使用）
+# 誤検知の抑制のみを行う。実際の秘密を許可する目的で regex を追加しないこと。
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "秘密ではない固定文字列の誤検知を抑制"
+regexTarget = "line"
+regexes = [
+  # Django キャッシュキー定数 (例: _CACHE_KEY = "cognito_jwks_keys_v1")
+  '''_CACHE_KEY\s*=\s*"[a-z0-9_]+"''',
+  # 用語ヘルプの識別子 prop (例: termKey="ma25_deviation")
+  '''termKey="[a-z0-9_]+"''',
+]

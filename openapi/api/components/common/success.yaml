@@ -1,0 +1,37 @@
+components:
+  schemas:
+    # -------------------------------------------------------------------------- *
+    # 成功レスポンス（単一リソース）
+    # -------------------------------------------------------------------------- *
+    # DRF のデフォルトレスポンス形式に準拠
+    # 各エンドポイントの results スキーマは paths/ 側で定義する
+
+    # -------------------------------------------------------------------------- *
+    # 成功レスポンス（一覧・ページネーション付き）
+    # -------------------------------------------------------------------------- *
+    PaginatedResponse:
+      type: object
+      properties:
+        count:
+          type: integer
+          example: 150
+          description: 総件数
+        next:
+          type: string
+          nullable: true
+          example: "http://localhost:18000/api/v1/stocks/?page=2"
+          description: 次ページURL（最終ページの場合 null）
+        previous:
+          type: string
+          nullable: true
+          example: null
+          description: 前ページURL（先頭ページの場合 null）
+        results:
+          type: array
+          items: {}
+          description: レスポンスデータの配列
+      required:
+        - count
+        - next
+        - previous
+        - results

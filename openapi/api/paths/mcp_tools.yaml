@@ -1,0 +1,870 @@
+openapi: 3.0.3
+info:
+  title: Fair Value Calculator — MCP Tools API
+  description: |
+    売買判断アシスト用ツール群。ChatGPT Custom GPT Actions から本 REST エンドポイントで利用する。
+
+    認証は Cognito OAuth2 (Authorization Code フロー) を使う。
+
+    Claude Desktop など MCP プロトコル直接対応クライアントは `/mcp` (Streamable HTTP) を、
+    あるいは本 REST エンドポイントを MCP API キー (`Authorization: Bearer fvc_mcp_xxxxxxxx`)
+    でも呼び出せる。API キーは Web UI `/settings` の「外部AI連携 APIキー」から発行する
+    （Custom GPT 用 OpenAPI 仕様では非公開）。
+  version: "1.0.0"
+servers:
+  - url: https://d3dz1e2hexhvbr.cloudfront.net/api
+    description: 本番環境（CloudFront）
+
+# Cognito OAuth2 で認証
+security:
+  - oauth2: [openid, profile, email]
+
+paths:
+  /v1/mcp/tools/:
+    get:
+      summary: 利用可能ツール一覧
+      operationId: listTools
+      tags: [meta]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tools:
+                    type: array
+                    items: { type: string }
+
+  /v1/mcp/tools/get_menu:
+    get:
+      summary: 会話メニュー (root → 中間 → 葉) を返す。対話の起点に使う
+      description: |
+        LLM が「何をしたいですか?」「何を知りたいですか?」「どの銘柄?」を段階的に提示するためのメニュー。
+        - 中間ノード: `options[].next_menu` → 再度 `get_menu` を呼ぶ
+        - 葉ノード:  `options[].next_tool` → 指定 MCP ツールを `params` で呼ぶ
+        - `display_markdown` をそのままユーザーに見せると最も自然に機能する
+      operationId: getMenu
+      tags: [meta]
+      parameters:
+        - in: query
+          name: level
+          required: false
+          schema: { type: string, default: "root" }
+          description: "メニュー階層。root / portfolio / stock_analysis_kind / pick_stock / etf_analysis / reit_analysis / holdings_ops"
+        - in: query
+          name: context
+          required: false
+          schema: { type: string }
+          description: "直前メニュー option の params を JSON 文字列で渡す (例: '{\"then_tool\":\"get_stock_summary\"}')"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MenuResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/get_stock_summary:
+    get:
+      summary: 銘柄サマリ（価格・PBR・フェアバリュー・implied_growth・52w・配当）
+      operationId: getStockSummary
+      tags: [stocks]
+      parameters:
+        - { in: query, name: code, required: true, schema: { type: string }, description: "証券コード（例: 7203）" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StockSummary" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/get_stock_financials:
+    get:
+      summary: 過去 N 年分の財務データ（売上・営業利益・EPS・ROE・BPS・CF）
+      operationId: getStockFinancials
+      tags: [stocks]
+      parameters:
+        - { in: query, name: code, required: true, schema: { type: string } }
+        - { in: query, name: years, required: false, schema: { type: integer, default: 5, minimum: 1, maximum: 20 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/StockFinancials" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/get_my_holdings:
+    get:
+      summary: 保有銘柄一覧と評価額（API キーに紐づくユーザー）
+      operationId: getMyHoldings
+      tags: [portfolio]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/HoldingsResponse" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/get_my_watchlist:
+    get:
+      summary: ウォッチリスト銘柄一覧
+      operationId: getMyWatchlist
+      tags: [portfolio]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code: { type: string }
+                        name: { type: string }
+                        memo: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/get_fx_analysis:
+    get:
+      summary: USD/JPY のフェアバリュー分析（金利差回帰・テクニカル・PPP）
+      operationId: getFxAnalysis
+      tags: [fx]
+      responses:
+        "200": { description: OK }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/get_earnings_calendar:
+    get:
+      summary: 今後の決算予定（J-Quants）
+      operationId: getEarningsCalendar
+      tags: [stocks]
+      parameters:
+        - { in: query, name: codes, required: false, schema: { type: string }, description: "カンマ区切りコード（省略時は全銘柄）" }
+        - { in: query, name: days_ahead, required: false, schema: { type: integer, default: 30, minimum: 1, maximum: 90 } }
+      responses:
+        "200": { description: OK }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/search_ticker:
+    get:
+      summary: 会社名・愛称・コードから銘柄候補を曖昧検索する（会話前に銘柄解決するためのツール）
+      operationId: searchTicker
+      tags: [stocks]
+      parameters:
+        - { in: query, name: query, required: true, schema: { type: string }, description: "検索文字列（例: yutori, トヨタ, 7203）。NFKC 正規化される。" }
+        - in: query
+          name: instrument_type
+          required: false
+          schema: { type: string, default: "all", enum: [all, stock, etf, reit, other] }
+          description: "銘柄種別フィルタ。既定 all。"
+        - in: query
+          name: market_type
+          required: false
+          schema: { type: string, enum: [JP, US] }
+          description: "市場種別フィルタ。既定なし（全市場）。"
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, default: 10, minimum: 1, maximum: 50 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer, description: "ヒット件数（0 の場合あり）" }
+                  query: { type: string, description: "正規化後の検索文字列" }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code: { type: string, example: "5892" }
+                        name: { type: string, example: "ｙｕｔｏｒｉ" }
+                        instrument_type: { type: string, enum: [stock, etf, reit, other] }
+                        market: { type: string, example: "東証グロース" }
+                        market_type: { type: string, enum: [JP, US] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/search_stock_news_sources:
+    get:
+      summary: 銘柄に関する信頼ソース（日経・TDnet・EDINET 等）の検索 URL を返す
+      operationId: searchStockNewsSources
+      tags: [news]
+      parameters:
+        - { in: query, name: code, required: true, schema: { type: string } }
+        - { in: query, name: query, required: false, schema: { type: string }, description: "追加検索キーワード" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string }
+                  stock_name: { type: string }
+                  sources:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string }
+                        url: { type: string }
+                        tier: { type: string, enum: [primary, secondary] }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/get_my_portfolio_summary:
+    get:
+      summary: ポートフォリオ集計（総資産・損益・資産クラス別・口座別・メンバー別）
+      operationId: getMyPortfolioSummary
+      tags: [portfolio]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PortfolioSummary" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/get_my_pnl:
+    get:
+      summary: 銘柄単位の含み損益（時価・原価・損益・損益率）
+      operationId: getMyPnl
+      tags: [portfolio]
+      parameters:
+        - { in: query, name: code, required: false, schema: { type: string }, description: "証券コード（省略時は全銘柄）" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PnlResponse" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/get_margin_balance:
+    get:
+      summary: 銘柄の信用残（買残・売残・信用倍率・直近 4 週履歴）
+      operationId: getMarginBalance
+      tags: [stocks]
+      parameters:
+        - { in: query, name: code, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MarginBalanceResponse" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/get_my_holdings_news:
+    get:
+      summary: 保有 + ウォッチ銘柄に紐づくニュース一覧
+      operationId: getMyHoldingsNews
+      tags: [news]
+      parameters:
+        - { in: query, name: days, required: false, schema: { type: integer, default: 7, minimum: 1, maximum: 90 } }
+        - { in: query, name: min_importance, required: false, schema: { type: string }, description: "重要度スコア下限（例 0.5）" }
+        - { in: query, name: limit, required: false, schema: { type: integer, default: 20, minimum: 1, maximum: 100 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/HoldingsNewsResponse" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/get_screening_candidates:
+    get:
+      summary: 買いたい銘柄候補（Gordon Growth + モメンタム）
+      operationId: getScreeningCandidates
+      tags: [stocks]
+      parameters:
+        - { in: query, name: growth_rate, required: false, schema: { type: string }, description: "Gordon Growth の g（デフォルト 0.02）" }
+        - { in: query, name: max_pbr_ratio, required: false, schema: { type: string }, description: "current_pbr ≤ fair_pbr × ratio" }
+        - { in: query, name: min_roe, required: false, schema: { type: string } }
+        - { in: query, name: include_zones, required: false, schema: { type: string }, description: "カンマ区切り評価ゾーン" }
+        - { in: query, name: min_momentum_signal, required: false, schema: { type: string } }
+        - { in: query, name: exclude_codes, required: false, schema: { type: string }, description: "カンマ区切り除外コード" }
+        - { in: query, name: limit, required: false, schema: { type: integer, default: 20, minimum: 1, maximum: 100 } }
+        - { in: query, name: market_type, required: false, schema: { type: string, default: "JP" } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ScreeningCandidatesResponse" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/get_sell_candidates:
+    get:
+      summary: 保有銘柄から売却候補を抽出（保守的 3 条件 AND）
+      operationId: getSellCandidates
+      tags: [portfolio]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SellCandidatesResponse" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/get_stock_risk_tags:
+    get:
+      summary: 銘柄の注意タグ（信用過熱・流動性低・過大評価ほか）
+      operationId: getStockRiskTags
+      tags: [stocks]
+      parameters:
+        - { in: query, name: code, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/StockTagsResponse" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/get_stock_opportunity_tags:
+    get:
+      summary: 銘柄の機会タグ（連続増配・52w 下端・RSI 売られすぎほか）
+      operationId: getStockOpportunityTags
+      tags: [stocks]
+      parameters:
+        - { in: query, name: code, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/StockTagsResponse" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/get_price_movers:
+    get:
+      summary: 急騰急落ランキング（前日比・出来高比・ストップ高安）
+      operationId: getPriceMovers
+      tags: [stocks]
+      parameters:
+        - { in: query, name: direction, required: false, schema: { type: string, enum: [gainers, losers, both], default: both } }
+        - { in: query, name: scope, required: false, schema: { type: string, enum: [all, my_watchlist, my_holdings], default: all }, description: "my_* は認証ユーザーの保有/ウォッチに紐づく" }
+        - { in: query, name: threshold_pct, required: false, schema: { type: string }, description: "絶対値 % 下限（デフォルト 5.0）" }
+        - { in: query, name: min_volume_ratio, required: false, schema: { type: string }, description: "出来高 20 日平均比下限" }
+        - { in: query, name: include_limit_hits, required: false, schema: { type: boolean, default: true }, description: "ストップ高/安は閾値無視で含める" }
+        - { in: query, name: limit, required: false, schema: { type: integer, default: 20, minimum: 1, maximum: 100 } }
+        - { in: query, name: date, required: false, schema: { type: string, format: date }, description: "集計日（省略時は最新）" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PriceMoversResponse" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/get_my_margin_positions:
+    get:
+      summary: 信用建玉一覧（建玉日・期限残・累計金利・現引き必要資金）
+      operationId: getMyMarginPositions
+      tags: [portfolio]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MarginPositionsResponse" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/get_my_holdings_alerts:
+    get:
+      summary: 保有 + ウォッチ銘柄の集約アラート (6 種類)
+      operationId: getMyHoldingsAlerts
+      tags: [portfolio]
+      parameters:
+        - { in: query, name: severity_min, required: false, schema: { type: string, enum: [low, medium, high], default: low } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/HoldingsAlertsResponse" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/get_my_dividends_calendar:
+    get:
+      summary: 保有銘柄の今後 N ヶ月の配当予定と受取予定額
+      operationId: getMyDividendsCalendar
+      tags: [portfolio]
+      parameters:
+        - { in: query, name: months_ahead, required: false, schema: { type: integer, default: 3, minimum: 1, maximum: 12 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/DividendsCalendarResponse" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/save_ai_decision:
+    get:
+      summary: AI 投資判断 (buy/sell/hold/watch) と根拠を保存
+      operationId: saveAiDecision
+      tags: [ai]
+      parameters:
+        - { in: query, name: code, required: true, schema: { type: string } }
+        - { in: query, name: decision_type, required: true, schema: { type: string, enum: [buy, sell, hold, watch] } }
+        - { in: query, name: rationale, required: true, schema: { type: string } }
+        - { in: query, name: confidence, required: false, schema: { type: string }, description: "0.00〜1.00" }
+        - { in: query, name: ai_model, required: false, schema: { type: string } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AiDecisionResponse" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /v1/mcp/tools/get_price_distribution_3m:
+    get:
+      summary: N 営業日後の株価分布予測 (Historical Bootstrap)
+      operationId: getPriceDistribution3m
+      tags: [stocks]
+      parameters:
+        - { in: query, name: code, required: true, schema: { type: string } }
+        - { in: query, name: horizon_days, required: false, schema: { type: integer, default: 90, minimum: 1, maximum: 365 } }
+        - { in: query, name: simulation_runs, required: false, schema: { type: integer, default: 10000, minimum: 100, maximum: 100000 } }
+        - { in: query, name: lookback_days, required: false, schema: { type: integer, default: 252, minimum: 30, maximum: 1260 } }
+        - { in: query, name: rng_seed, required: false, schema: { type: integer }, description: "再現性確保用の乱数シード" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PriceDistributionResponse" } } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        # ChatGPT Custom GPT は Authorization URL / Token URL / API hostname が同じルート
+        # ドメインを共有することを要求するため、Cognito の OAuth エンドポイントを
+        # CloudFront 経由で公開している (terraform/cloudfront.tf の cognito-hosted-ui origin)。
+        #
+        # authorizationUrl に `identity_provider=Google` を付与しているのは、Cognito
+        # Hosted UI の「Continue with Google」ボタンをスキップして直接 Google OAuth
+        # consent 画面に遷移させるため。ChatGPT 利用ユーザーは Google アカウントで
+        # 招待されることを前提とし、Cognito email/password ログインは Web 画面側で
+        # 利用する想定。
+        authorizationCode:
+          authorizationUrl: https://d3dz1e2hexhvbr.cloudfront.net/oauth2/authorize?identity_provider=Google
+          tokenUrl: https://d3dz1e2hexhvbr.cloudfront.net/oauth2/token
+          scopes:
+            openid: ID token
+            profile: User profile
+            email: Email address
+
+  responses:
+    BadRequest:
+      description: パラメータ不正
+      content:
+        application/json:
+          schema: { type: object, properties: { detail: { type: string } } }
+    Unauthorized:
+      description: 認証失敗（トークンが無効・失効・未指定）
+      content:
+        application/json:
+          schema: { type: object, properties: { detail: { type: string } } }
+
+  schemas:
+    StockSummary:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        sector: { type: string }
+        is_active: { type: boolean }
+        latest_price: { type: string, nullable: true }
+        latest_price_date: { type: string, nullable: true }
+        bps: { type: string, nullable: true }
+        eps: { type: string, nullable: true }
+        roe: { type: string, nullable: true }
+        current_pbr: { type: string, nullable: true }
+        fair_pbr: { type: string, nullable: true }
+        fair_value: { type: string, nullable: true }
+        discount_rate: { type: string, nullable: true }
+        evaluation_zone: { type: string, nullable: true }
+        implied_growth_rate: { type: string, nullable: true }
+        growth_rate_label: { type: string, nullable: true }
+        eps_growth_yoy: { type: string, nullable: true }
+        eps_cagr_3y: { type: string, nullable: true }
+        roe_trend: { type: string, nullable: true }
+        price_position_52w: { type: string, nullable: true }
+        near_52w_high: { type: boolean, nullable: true }
+        dividend_yield: { type: string, nullable: true }
+        payout_ratio: { type: string, nullable: true }
+        not_calculable_reason: { type: string, nullable: true }
+        growth_rate_assumed: { type: string }
+
+    StockFinancials:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        years:
+          type: array
+          items:
+            type: object
+            properties:
+              fiscal_year: { type: integer }
+              period_end_date: { type: string, nullable: true }
+              bps: { type: string, nullable: true }
+              eps: { type: string, nullable: true }
+              roe: { type: string, nullable: true }
+              revenue: { type: integer, nullable: true }
+              operating_income: { type: integer, nullable: true }
+              operating_cash_flow: { type: integer, nullable: true }
+              free_cash_flow: { type: integer, nullable: true }
+              eps_forecast: { type: string, nullable: true }
+
+    HoldingsResponse:
+      type: object
+      properties:
+        total_value: { type: string, nullable: true }
+        stock_total: { type: string, nullable: true }
+        non_stock_value: { type: string, nullable: true }
+        by_asset_class:
+          type: object
+          additionalProperties: { type: string }
+        holdings:
+          type: array
+          items:
+            type: object
+            properties:
+              account_id: { type: integer }
+              account_label: { type: string }
+              asset_class: { type: string, nullable: true }
+              family_member: { type: string, nullable: true }
+              stock_code: { type: string, nullable: true }
+              name: { type: string }
+              asset_type: { type: string }
+              quantity: { type: string, nullable: true }
+              unit_price: { type: string, nullable: true }
+              snapshot_value_jpy: { type: string, nullable: true }
+              cost_jpy: { type: string, nullable: true }
+
+    PortfolioSummary:
+      type: object
+      properties:
+        as_of: { type: string }
+        total_value: { type: string, nullable: true }
+        total_cost: { type: string, nullable: true }
+        unrealized_pnl: { type: string, nullable: true }
+        unrealized_pnl_pct: { type: string, nullable: true }
+        stock_total: { type: string, nullable: true }
+        non_stock_value: { type: string, nullable: true }
+        day_change_pct: { type: string, nullable: true }
+        by_asset_class:
+          type: object
+          additionalProperties: { type: string }
+        by_account:
+          type: array
+          items:
+            type: object
+            properties:
+              account_id: { type: integer }
+              label: { type: string }
+              institution: { type: string }
+              asset_class: { type: string, nullable: true }
+              trading_type: { type: string, nullable: true }
+              family_member: { type: string, nullable: true }
+              value: { type: string, nullable: true }
+              cost: { type: string, nullable: true }
+              pnl: { type: string, nullable: true }
+        by_member:
+          type: array
+          items:
+            type: object
+            properties:
+              member_id: { type: integer }
+              member_name: { type: string }
+              value: { type: string, nullable: true }
+
+    PnlResponse:
+      type: object
+      properties:
+        as_of: { type: string }
+        holdings:
+          type: array
+          items:
+            type: object
+            properties:
+              stock_code: { type: string, nullable: true }
+              stock_id: { type: integer, nullable: true }
+              name: { type: string }
+              account_id: { type: integer }
+              account_label: { type: string }
+              trading_type: { type: string }
+              quantity: { type: string, nullable: true }
+              avg_cost: { type: string, nullable: true }
+              current_price: { type: string, nullable: true }
+              market_value: { type: string, nullable: true }
+              cost: { type: string, nullable: true }
+              unrealized_pnl: { type: string, nullable: true }
+              unrealized_pnl_pct: { type: string, nullable: true }
+              day_change_pct: { type: string, nullable: true }
+
+    MarginBalanceResponse:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        as_of: { type: string, nullable: true }
+        buy_balance_shares: { type: integer, nullable: true }
+        sell_balance_shares: { type: integer, nullable: true }
+        buy_balance_change: { type: integer, nullable: true }
+        sell_balance_change: { type: integer, nullable: true }
+        sl_ratio: { type: string, nullable: true }
+        credit_ratio: { type: string, nullable: true }
+        history_last_4w:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: string }
+              buy_balance_shares: { type: integer, nullable: true }
+              sell_balance_shares: { type: integer, nullable: true }
+              buy_balance_change: { type: integer, nullable: true }
+              sell_balance_change: { type: integer, nullable: true }
+              sl_ratio: { type: string, nullable: true }
+
+    HoldingsNewsResponse:
+      type: object
+      properties:
+        count: { type: integer }
+        total: { type: integer }
+        articles:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer, nullable: true }
+              title: { type: string }
+              url: { type: string }
+              summary: { type: string }
+              category: { type: string }
+              publisher: { type: string, nullable: true }
+              language: { type: string }
+              published_at: { type: string, nullable: true }
+              importance_score: { type: string, nullable: true }
+
+    ScreeningCandidatesResponse:
+      type: object
+      properties:
+        count: { type: integer }
+        candidates:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { type: string }
+              name: { type: string }
+              sector: { type: string }
+              latest_price: { type: string, nullable: true }
+              current_pbr: { type: string, nullable: true }
+              fair_pbr: { type: string, nullable: true }
+              fair_value: { type: string, nullable: true }
+              discount_rate: { type: string, nullable: true }
+              evaluation_zone: { type: string, nullable: true }
+              roe: { type: string, nullable: true }
+              roe_trend: { type: string, nullable: true }
+              momentum_signal: { type: string, nullable: true }
+              dividend_yield: { type: string, nullable: true }
+              liquidity_level: { type: string, nullable: true }
+        filters_applied: { type: object, additionalProperties: true }
+
+    SellCandidatesResponse:
+      type: object
+      properties:
+        count: { type: integer }
+        evaluated_holdings_count: { type: integer }
+        judgment_criteria: { type: string }
+        candidates:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { type: string }
+              name: { type: string }
+              sector: { type: string }
+              latest_price: { type: string, nullable: true }
+              current_pbr: { type: string, nullable: true }
+              fair_pbr: { type: string, nullable: true }
+              fair_value: { type: string, nullable: true }
+              discount_rate: { type: string, nullable: true }
+              evaluation_zone: { type: string, nullable: true }
+              momentum_signal: { type: string, nullable: true }
+              roe_trend: { type: string, nullable: true }
+              trigger_reasons:
+                type: array
+                items: { type: string }
+
+    StockTagsResponse:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        as_of: { type: string, nullable: true }
+        rsi_14: { type: string, nullable: true }
+        risk_tags:
+          type: array
+          items:
+            type: object
+            properties:
+              tag: { type: string }
+              severity: { type: string, enum: [high, medium, low] }
+              detail: { type: string }
+        opportunity_tags:
+          type: array
+          items:
+            type: object
+            properties:
+              tag: { type: string }
+              severity: { type: string, enum: [high, medium, low] }
+              detail: { type: string }
+
+    PriceMoversResponse:
+      type: object
+      properties:
+        as_of: { type: string, nullable: true }
+        scope: { type: string }
+        direction: { type: string }
+        filters_applied: { type: object, additionalProperties: true }
+        gainers:
+          type: array
+          items: { $ref: "#/components/schemas/PriceMoverEntry" }
+        losers:
+          type: array
+          items: { $ref: "#/components/schemas/PriceMoverEntry" }
+
+    PriceMoverEntry:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        close: { type: string, nullable: true }
+        prev_close: { type: string, nullable: true }
+        change_pct: { type: string, nullable: true }
+        volume: { type: integer, nullable: true }
+        volume_ratio_20d: { type: string, nullable: true }
+        is_limit_up: { type: boolean }
+        is_limit_down: { type: boolean }
+
+    MarginPositionsResponse:
+      type: object
+      properties:
+        as_of: { type: string }
+        count: { type: integer }
+        positions:
+          type: array
+          items:
+            type: object
+            properties:
+              stock_code: { type: string, nullable: true }
+              stock_id: { type: integer, nullable: true }
+              name: { type: string }
+              account_id: { type: integer, nullable: true }
+              account_label: { type: string }
+              credit_type: { type: string, nullable: true }
+              credit_type_display: { type: string }
+              quantity: { type: string, nullable: true }
+              built_date: { type: string, nullable: true }
+              effective_built_date: { type: string }
+              expiry_date: { type: string, nullable: true }
+              days_to_expiry: { type: integer, nullable: true }
+              days_held: { type: integer }
+              build_price: { type: string, nullable: true }
+              current_price: { type: string, nullable: true }
+              interest_rate: { type: string, nullable: true }
+              accrued_interest: { type: string, nullable: true }
+              cost_jpy: { type: string, nullable: true }
+              genbiki_cash_required: { type: string, nullable: true }
+              market_value: { type: string, nullable: true }
+              unrealized_pnl: { type: string, nullable: true }
+              warning_tags:
+                type: array
+                items: { type: string }
+
+    HoldingsAlertsResponse:
+      type: object
+      properties:
+        as_of: { type: string }
+        alerts_count: { type: integer }
+        alerts:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { type: string }
+              name: { type: string }
+              alert_type:
+                type: string
+                enum:
+                  - stop_high_today
+                  - stop_low_today
+                  - earnings_within_3d
+                  - margin_expiry_within_30d
+                  - risk_tag_high_severity
+                  - near_52w_high_breakout
+              severity: { type: string, enum: [high, medium, low] }
+              detail: { type: string }
+              source: { type: string, enum: [holdings, watchlist] }
+
+    DividendsCalendarResponse:
+      type: object
+      properties:
+        as_of: { type: string }
+        months_ahead: { type: integer }
+        currency: { type: string }
+        total_expected_amount: { type: string }
+        warnings:
+          type: array
+          items: { type: string }
+        upcoming:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { type: string }
+              name: { type: string }
+              stock_id: { type: integer }
+              ex_dividend_date: { type: string }
+              record_date: { type: string, nullable: true }
+              payable_date: { type: string, nullable: true }
+              dividend_per_share: { type: string }
+              quantity: { type: string }
+              expected_amount: { type: string }
+              source: { type: string }
+
+    AiDecisionResponse:
+      type: object
+      properties:
+        id: { type: integer }
+        user_id: { type: integer }
+        stock_code: { type: string }
+        stock_name: { type: string }
+        decision_type: { type: string, enum: [buy, sell, hold, watch] }
+        rationale: { type: string }
+        confidence: { type: string, nullable: true }
+        ai_model: { type: string }
+        decided_at: { type: string, nullable: true }
+        snapshot_indicators_keys:
+          type: array
+          items: { type: string }
+
+    PriceDistributionResponse:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        model: { type: string }
+        current_price: { type: string }
+        fair_value: { type: string, nullable: true }
+        horizon_days: { type: integer }
+        simulation_runs: { type: integer }
+        expected_price: { type: string, nullable: true }
+        not_calculable_reason: { type: string, nullable: true }
+        percentiles:
+          nullable: true
+          type: object
+          properties:
+            p10: { type: string }
+            p25: { type: string }
+            p50: { type: string }
+            p75: { type: string }
+            p90: { type: string }
+        prob_above_current: { type: string, nullable: true }
+        prob_above_fair_value: { type: string, nullable: true }
+        assumptions:
+          type: object
+          additionalProperties: true
+
+    MenuResponse:
+      type: object
+      properties:
+        level: { type: string, description: "返したメニュー階層", example: "root" }
+        title: { type: string, description: "ユーザーへの問いかけ", example: "何をしたいですか?" }
+        options:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, description: "option を一意に識別する ID。ユーザー入力のマッチングに使う" }
+              label: { type: string, description: "ユーザーに見せる表示文字列" }
+              hint: { type: string, nullable: true, description: "補足説明 (任意)" }
+              next_menu: { type: string, nullable: true, description: "中間ノードなら次の get_menu level" }
+              next_tool: { type: string, nullable: true, description: "葉ノードなら呼び出す MCP ツール名" }
+              params:
+                type: object
+                nullable: true
+                additionalProperties: true
+                description: "next_tool 呼出時のパラメータ雛形。next_menu 時は次の context に乗せる"
+        display_markdown:
+          type: string
+          description: "そのままユーザーに見せる markdown。LLM は改変せず提示することを推奨"
