@@ -20,6 +20,18 @@ DATABASES = {  # noqa: F405
     }
 }
 
+# --- Cache (DB-backed cache for Lambda) ---
+CACHES = {  # noqa: F405
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "django_cache",
+        "TIMEOUT": 1800,  # 30分
+        "OPTIONS": {
+            "MAX_ENTRIES": 200,
+        },
+    }
+}
+
 # CORS: CloudFront 経由のためワイルドカード許可
 CORS_ALLOW_ALL_ORIGINS = True
 

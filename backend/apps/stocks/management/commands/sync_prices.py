@@ -83,3 +83,12 @@ class Command(BaseCommand):
                 f"errors={log.error_count}"
             )
         )
+
+        # 株価同期完了後にスクリーニングキャッシュを無効化
+        from django.core.management import call_command
+
+        try:
+            call_command("invalidate_screening_cache")
+            self.stdout.write(self.style.SUCCESS("スクリーニングキャッシュを無効化しました"))
+        except Exception as e:
+            self.stderr.write(self.style.ERROR(f"キャッシュ無効化エラー: {e}"))

@@ -6,5 +6,7 @@ export function useScreening(params: ScreeningParams) {
     queryKey: ["screening", params],
     queryFn: () => screeningApi.search(params).then((r) => r.data),
     enabled: true,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 }

@@ -5,9 +5,13 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
+from html import unescape
 from html.parser import HTMLParser
 
 logger = logging.getLogger(__name__)
+
+# 代表者氏名として妥当とみなす最大文字数
+_MAX_NAME_LENGTH = 12
 
 
 @dataclass
@@ -63,21 +67,29 @@ class ShareholderParseService:
         return results
 
     def parse_representative(self, html: str) -> str | None:
-        """代表者情報テキストブロックから代表者名を抽出。"""
-        # 「代表取締役社長」「代表取締役」の後に続く名前を抽出
-        patterns = [
-            r"代表取締役(?:社長|会長)?[　\s]*([^\s<　]{1,4}[　\s]+[^\s<　]{1,4})",
-            r"代表取締役(?:社長|会長)?[　\s]*([^\s<　]{2,8})",
-        ]
-        # HTMLタグを除去
-        text = re.sub(r"<[^>]+>", " ", html)
-        text = re.sub(r"\s+", " ", text)
+        """代表者情報テキストブロックから代表者名を抽出。
 
-        for pattern in patterns:
-            m = re.search(pattern, text)
-            if m:
-                return m.group(1).strip()
-        return None
+        有報の表紙は氏名が1文字ずつ全角スペースで区切られることが多い
+        （例: "代表取締役社長　　横　田　義　之"）。役職以降を氏名とみなし、
+        空白をすべて除去して "横田義之" の形に正規化する。
+        """
+        # HTMLタグ除去 → 実体参照（&#160; 等）を解決
+        text = re.sub(r"<[^>]+>", " ", html)
+        text = unescape(text)
+        # NBSP を通常の空白に寄せてから空白を潰す
+        text = text.replace(" ", " ")
+        text = re.sub(r"[\s　]+", " ", text).strip()
+
+        # 役職部分を取り除き、以降を氏名として扱う
+        m = re.search(r"代表(?:取締役|執行役)?[^\s]*(?:社長|会長|CEO)?\s*(.+)$", text)
+        if m is None:
+            return None
+
+        name = re.sub(r"[\s　]", "", m.group(1))
+        # 氏名として妥当な長さのみ採用（肩書きの取りこぼし等を弾く）
+        if not 2 <= len(name) <= _MAX_NAME_LENGTH:  # noqa: PLR2004
+            return None
+        return name
 
     def _parse_ratio(self, text: str) -> float | None:
         """テキストから持ち株比率を抽出。"""

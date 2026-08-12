@@ -71,6 +71,7 @@ class Command(BaseCommand):
         self._diag_4_chart_dates_baseline()
         self._diag_5_asset_class_breakdown(account_filter)
         self._diag_6_share_dashboard_internals(member_id=member_id, user_id=user_id)
+        self._diag_7_new_buyins_and_cost_coverage(member_id=member_id, user_id=user_id)
 
         self.stdout.write(self.style.MIGRATE_HEADING("=" * 60))
         self.stdout.write("診断完了")
@@ -294,3 +295,137 @@ class Command(BaseCommand):
                     "の取りこぼし対応) で解消できます。"
                 )
             )
+
+    # ============================================================
+    # 診断 7: 当月新規購入 (buy-in) 検出 + cost_jpy 欠損率
+    #   アプローチA (原価ベース補正) の実装判断材料。
+    #   - baseline = 前月末日以前の各口座最新スナップショット
+    #   - current  = 各口座の最新スナップショット
+    #   同一口座内で baseline に無い / 数量が増えた holding を「当月新規購入」とみなし、
+    #   その原価 (cost_jpy) の混入額と、cost_jpy 欠損の有無を出力する。
+    # ============================================================
+    def _diag_7_new_buyins_and_cost_coverage(
+        self,
+        member_id: int | None,
+        user_id: int | None,
+    ) -> None:
+        from decimal import Decimal
+
+        from apps.portfolios.infrastructure.repositories import (
+            DjangoAccountSnapshotRepository,
+            DjangoPortfolioAccountRepository,
+        )
+
+        self.stdout.write(self.style.NOTICE("\n[診断 7] 当月新規購入 (buy-in) 検出 + cost_jpy 欠損率"))
+
+        today = datetime.date.today()
+        baseline_date = today.replace(day=1) - datetime.timedelta(days=1)
+        baseline_date_str = baseline_date.isoformat()
+        self.stdout.write(f"  baseline 基準日 (前月末): {baseline_date_str}")
+
+        # 対象ユーザーの決定。user_id 省略時は全ユーザーを対象に走査する。
+        # PortfolioAccount はモジュール冒頭で import 済み。
+        account_repo = DjangoPortfolioAccountRepository()
+        user_ids: list[int]
+        if user_id is not None:
+            user_ids = [user_id]
+        else:
+            uid_qs = PortfolioAccount.objects.filter(is_active=True)
+            if member_id is not None:
+                uid_qs = uid_qs.filter(family_member_id=member_id)
+            user_ids = sorted(
+                {uid for uid in uid_qs.values_list("family_member__user_id", flat=True) if uid is not None}
+            )
+
+        if not user_ids:
+            self.stdout.write("  対象ユーザーなし")
+            return
+
+        snapshot_repo = DjangoAccountSnapshotRepository()
+
+        total_buyin_count = 0
+        total_buyin_cost = Decimal(0)
+        total_buyin_value = Decimal(0)
+        missing_cost_count = 0
+        missing_cost_value = Decimal(0)
+
+        def _holding_key(h: Any) -> str:
+            """baseline / current 突合キー。stock_id > proxy_stock_id > asset_name の優先で解決。"""
+            if h.stock_id is not None:
+                return f"s:{h.stock_id}"
+            if h.proxy_stock_id is not None:
+                return f"p:{h.proxy_stock_id}"
+            return f"n:{h.asset_name}"
+
+        for uid in user_ids:
+            accounts = account_repo.find_by_user(uid)
+            account_ids = {a.id for a in accounts if a.id is not None}
+            if member_id is not None:
+                account_ids = {a.id for a in accounts if a.family_member_id == member_id and a.id is not None}
+            if not account_ids:
+                continue
+
+            latest_snapshots = snapshot_repo.find_latest_by_user(uid)
+            baseline_snapshots = snapshot_repo.find_each_account_latest_before(
+                uid, baseline_date_str, with_holdings=True
+            )
+            baseline_by_account = {s.account_id: s for s in baseline_snapshots if s.account_id in account_ids}
+
+            for snap in latest_snapshots:
+                if snap.account_id not in account_ids:
+                    continue
+                base_snap = baseline_by_account.get(snap.account_id)
+                base_qty: dict[str, Decimal] = {}
+                if base_snap is not None:
+                    for bh in base_snap.holdings:
+                        key = _holding_key(bh)
+                        base_qty[key] = base_qty.get(key, Decimal(0)) + (bh.quantity or Decimal(0))
+
+                for h in snap.holdings:
+                    # 株式 / 投信のみ対象 (現金等 monolithic は holdings に出ない)
+                    if h.quantity is None or h.quantity <= 0:
+                        continue
+                    key = _holding_key(h)
+                    prev_qty = base_qty.get(key, Decimal(0))
+                    if h.quantity <= prev_qty:
+                        continue  # 数量増なし = 当月新規購入ではない
+
+                    # 増加数量ぶんを新規購入とみなす
+                    added_qty = h.quantity - prev_qty
+                    ratio = added_qty / h.quantity if h.quantity > 0 else Decimal(0)
+                    added_value = h.value_jpy * ratio
+                    total_buyin_count += 1
+                    total_buyin_value += added_value
+
+                    if h.cost_jpy is None:
+                        missing_cost_count += 1
+                        missing_cost_value += added_value
+                    else:
+                        total_buyin_cost += h.cost_jpy * ratio
+
+        self.stdout.write(f"  当月新規購入 (増分) 件数 : {total_buyin_count}")
+        self.stdout.write(f"  新規購入分の現在評価額   : ¥{int(total_buyin_value):,}")
+        self.stdout.write(f"  新規購入分の取得原価 (cost_jpy あり): ¥{int(total_buyin_cost):,}")
+
+        if total_buyin_count == 0:
+            self.stdout.write(self.style.SUCCESS("  ✓ 当月新規購入なし → MTD への買付額混入なし"))
+            return
+
+        self.stdout.write(
+            self.style.WARNING(
+                f"  ⚠️ 現状 MTD には上記 ¥{int(total_buyin_value):,} の買付額が"
+                "「値上がり益」として混入している可能性があります。"
+            )
+        )
+        self.stdout.write(
+            f"     アプローチA適用後は baseline に取得原価 ¥{int(total_buyin_cost):,} を加算して相殺します。"
+        )
+        if missing_cost_count > 0:
+            self.stdout.write(
+                self.style.ERROR(
+                    f"  ⚠️ うち {missing_cost_count} 件 / ¥{int(missing_cost_value):,} は cost_jpy が欠損。"
+                    "アプローチAでは原価で相殺できず、その月は近似 (現在評価額で代用) が必要です。"
+                )
+            )
+        else:
+            self.stdout.write(self.style.SUCCESS("  ✓ 新規購入分は全て cost_jpy あり → アプローチA適用可能"))

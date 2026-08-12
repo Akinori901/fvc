@@ -209,6 +209,47 @@ export default function ScreeningFilterModal({ open, onClose, filters, onApply, 
           />
 
           <Divider />
+          <Typography variant="subtitle2" color="primary">信用買残トレンド</Typography>
+          <Typography variant="caption" color="text.secondary">
+            信用買残は将来の売り圧力。決算利益の伸びと「買残の減少」を組み合わせると需給改善の候補を探せます。
+          </Typography>
+          <FormControl size="small" fullWidth>
+            <InputLabel>信用買残の増減</InputLabel>
+            <Select
+              label="信用買残の増減"
+              value={local.long_balance_trend ?? ""}
+              onChange={(e) =>
+                set("long_balance_trend", (e.target.value || null) as ScreeningFilters["long_balance_trend"])
+              }
+            >
+              <MenuItem value="">指定なし</MenuItem>
+              <MenuItem value="decreasing">減少している</MenuItem>
+              <MenuItem value="increasing">増加している</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl size="small" fullWidth disabled={local.long_balance_trend === null}>
+            <InputLabel>評価期間</InputLabel>
+            <Select
+              label="評価期間"
+              value={local.margin_trend_months}
+              onChange={(e) => set("margin_trend_months", Number(e.target.value))}
+            >
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                <MenuItem key={m} value={m}>{m}ヶ月</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField
+            label="変化率の閾値 %（例: 10 で 10%以上の増減）"
+            type="number"
+            size="small"
+            disabled={local.long_balance_trend === null}
+            value={local.margin_trend_threshold_pct ?? ""}
+            onChange={(e) => set("margin_trend_threshold_pct", numOrNull(e.target.value))}
+            helperText="未指定なら増減の方向のみで判定します"
+          />
+
+          <Divider />
           <Typography variant="subtitle2" color="primary">経営</Typography>
           <FormControlLabel
             control={<Switch checked={local.owner_managed_only} onChange={(e) => set("owner_managed_only", e.target.checked)} />}

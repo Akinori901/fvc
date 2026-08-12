@@ -19,6 +19,7 @@ import {
   Avatar,
   FormControlLabel,
   Switch,
+  Tooltip,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
@@ -26,6 +27,8 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import PersonIcon from "@mui/icons-material/Person";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import HistoryToggleOffIcon from "@mui/icons-material/HistoryToggleOff";
 import {
   useFamilyMembers,
   usePortfolioAccounts,
@@ -56,7 +59,25 @@ import type {
   PortfolioAccount,
   PortfolioAccountInput,
   AccountRow,
+  ImportWarning,
 } from "@/types/familyPortfolio";
+
+// 取込漏れ警告の表示定義
+const IMPORT_WARNING_META: Record<
+  ImportWarning,
+  { label: string; tooltip: string }
+> = {
+  no_detail: {
+    label: "明細なし",
+    tooltip:
+      "この口座は明細（保有銘柄）がありません。専用CSVでの取り込みが必要かもしれません（信用・iDeCo・ジュニアNISA等は総合CSVに含まれません）。全て売却済みの場合はこの警告は無視できます。",
+  },
+  stale: {
+    label: "更新が古い",
+    tooltip:
+      "最新の残高が14日以上前です。CSVの取り込みが止まっている可能性があります。",
+  },
+};
 
 const MEMBER_ROLES = Object.entries(MEMBER_ROLE_LABELS) as [MemberRole, string][];
 const INSTITUTION_TYPES = Object.entries(INSTITUTION_TYPE_LABELS) as [InstitutionType, string][];
@@ -261,6 +282,23 @@ export default function AccountsTab({ accountRows = [] }: AccountsTabProps) {
                                 {acc.currency !== "JPY" && (
                                   <Chip label={acc.currency} size="small" color="warning" />
                                 )}
+                                {(acc.import_warnings ?? []).map((w) => (
+                                  <Tooltip key={w} title={IMPORT_WARNING_META[w].tooltip}>
+                                    <Chip
+                                      icon={
+                                        w === "no_detail" ? (
+                                          <WarningAmberIcon />
+                                        ) : (
+                                          <HistoryToggleOffIcon />
+                                        )
+                                      }
+                                      label={IMPORT_WARNING_META[w].label}
+                                      size="small"
+                                      color="warning"
+                                      variant="outlined"
+                                    />
+                                  </Tooltip>
+                                ))}
                               </Stack>
                               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                                 {latest?.latest_value_jpy != null

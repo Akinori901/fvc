@@ -31,6 +31,7 @@ import type { AssetClass, CsvHoldingDiff, CsvPreviewResult } from "@/types/famil
 const PROVIDERS = [
   { value: "rakuten", label: "楽天証券（保有商品）" },
   { value: "rakuten_fund", label: "楽天証券（投資信託）" },
+  { value: "rakuten_junior_nisa", label: "楽天証券（ジュニアNISA）" },
   { value: "rakuten_margin", label: "楽天証券（信用取引）" },
   { value: "rakuten_ideco", label: "楽天証券（iDeCo）" },
   { value: "sbi_portfolio", label: "SBI証券（ポートフォリオ）" },
@@ -56,6 +57,15 @@ const PROVIDER_HELP: Record<string, { title: string; steps: string[] }> = {
       "「保有商品一覧」タブを選択",
       "表示切替で「投資信託」を選択",
       "「CSV ダウンロード」ボタンをクリック",
+    ],
+  },
+  rakuten_junior_nisa: {
+    title: "楽天証券 ジュニアNISA CSVのダウンロード方法",
+    steps: [
+      "楽天証券（ジュニアNISA口座）にログイン",
+      "「保有商品一覧」ページを開く",
+      "「CSV ダウンロード」ボタンをクリック（assetbalance(INVST)_*.csv）",
+      "18歳到達後は全体CSVの「ジュニアNISA」区分として同じ口座に取り込まれます",
     ],
   },
   rakuten_margin: {

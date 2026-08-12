@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from apps.stocks.domain.dividend_metrics import compute_dividend_metrics
 from apps.stocks.domain.fcf_metrics import compute_fcf_metrics
 from apps.stocks.domain.growth_metrics import compute_growth_metrics
+from apps.stocks.domain.margin_trend_metrics import compute_margin_trend_metrics
 from apps.stocks.domain.technical_metrics import compute_technical_metrics
 from apps.valuations.domain.entities import MARKET_COST_OF_CAPITAL, FairValueCalculation, growth_rate_label
 
@@ -65,6 +66,9 @@ class ScreeningResult:
     long_balance: int | None = None  # 信用買残（株数）
     short_balance: int | None = None  # 信用売残（株数）
     long_balance_change: int | None = None  # 信用買残変化
+    # 信用買残トレンド（指定期間の増減）
+    long_balance_change_pct: Decimal | None = None  # 指定期間の信用買残変化率 (%)
+    long_balance_trend: str | None = None  # "increasing" / "decreasing" / "flat"
     # テクニカル指標（52週高値効果）
     price_position_52w: Decimal | None = None  # 52週レンジ内の位置 (0.0〜1.0)
     near_52w_high: bool | None = None  # 52週高値近接フラグ (5%以内)
@@ -94,6 +98,11 @@ class ScreeningResult:
 
 _LIQUIDITY_ORDER: dict[str, int] = {"high": 3, "medium": 2, "low": 1, "very_low": 0}
 _MOMENTUM_ORDER: dict[str, int] = {"strong_buy": 4, "buy": 3, "neutral": 2, "caution": 1, "sell": 0}
+
+
+def _trend_weeks(months: int) -> int:
+    """信用買残トレンドの評価に必要な週数（余裕を持たせて +2 週分取得する）。"""
+    return int(months * 4.345) + 2
 
 
 def _get_liquidity_level(avg_turnover: Decimal | None) -> str | None:
@@ -183,6 +192,9 @@ class ScreeningUseCase:
         min_momentum_signal: str | None = None,  # "strong_buy"/"buy"/"neutral"/"caution"/"sell"
         owner_managed_only: bool = False,
         min_fcf_yield: Decimal | None = None,
+        margin_trend_months: int | None = None,  # 信用買残トレンドの評価期間（月）
+        long_balance_trend: str | None = None,  # "increasing" / "decreasing"
+        margin_trend_threshold_pct: Decimal | None = None,  # 変化率の閾値（絶対値, %）
         code: str | None = None,  # 単一銘柄モード: 指定された場合は対象銘柄のみ計算
     ) -> list[ScreeningResult]:
         """スクリーニングを実行。
@@ -193,6 +205,9 @@ class ScreeningUseCase:
         - include_inactive=True の場合は上場廃止銘柄も含む。
         - min_eps_growth_yoy / min_eps_cagr_3y / roe_trend_filter / min_roe: 成長フィルター。
         - max_sl_ratio: 信売比率の上限フィルター。
+        - margin_trend_months / long_balance_trend / margin_trend_threshold_pct:
+          信用買残トレンドフィルター。指定期間の買残変化率で増加・減少を絞り込む。
+          期間分のデータが無い銘柄は判定不能として除外される。
         - code: 指定された場合、その1銘柄のみ計算する（StockDetailView などからの呼び出し用）。
         """
         if code is not None:
@@ -213,6 +228,10 @@ class ScreeningUseCase:
             all_recent = {sid: self._financial_repo.find_recent_by_stock_id(sid, limit=4)}
             single_margin = self._margin_repo.find_latest_by_stock_id(sid) if self._margin_repo else None
             all_margins = {sid: single_margin} if single_margin else {}
+            all_recent_margins = {}
+            if self._margin_repo and margin_trend_months:
+                recent_m = self._margin_repo.find_recent_by_stock_id(sid, limit=_trend_weeks(margin_trend_months))
+                all_recent_margins = {sid: recent_m} if recent_m else {}
             try:
                 hl = self._price_repo.find_52w_high_low(sid) if self._price_repo else None
                 all_52w = {sid: hl} if hl else {}
@@ -228,6 +247,14 @@ class ScreeningUseCase:
             all_financials = self._financial_repo.find_all_latest()
             all_recent = self._financial_repo.find_all_recent(limit=4)
             all_margins = self._margin_repo.find_all_latest() if self._margin_repo else {}
+            all_recent_margins = {}
+            if self._margin_repo and margin_trend_months:
+                try:
+                    all_recent_margins = self._margin_repo.find_all_recent(weeks=_trend_weeks(margin_trend_months))
+                except Exception:
+                    import logging
+
+                    logging.getLogger(__name__).warning("信用残高履歴の取得に失敗。フォールバック。", exc_info=True)
             try:
                 all_52w = self._price_repo.find_all_52w_high_low() if self._price_repo else {}
                 all_recent_prices = self._price_repo.find_all_recent_prices(limit=25) if self._price_repo else {}
@@ -316,6 +343,12 @@ class ScreeningUseCase:
                 revenue=financial.revenue if financial else None,
             )
 
+            # 信用買残トレンド指標
+            mtm = compute_margin_trend_metrics(
+                recent_margins=all_recent_margins.get(stock.id, []),
+                months=margin_trend_months or 0,
+            )
+
             # オーナー経営指標
             owner_list = all_owners.get(stock.id, [])
             is_owner = bool(owner_list)
@@ -384,6 +417,19 @@ class ScreeningUseCase:
             # オーナー経営フィルター
             if owner_managed_only and not is_owner:
                 continue
+            # 信用買残トレンドフィルター
+            # （期間分のデータが無い銘柄は判定できないため除外する）
+            if long_balance_trend is not None:
+                if mtm.long_balance_change_pct is None:
+                    continue
+                if long_balance_trend == "decreasing":
+                    threshold = -(margin_trend_threshold_pct or Decimal(0))
+                    if mtm.long_balance_change_pct > threshold:
+                        continue
+                elif long_balance_trend == "increasing":
+                    threshold = margin_trend_threshold_pct or Decimal(0)
+                    if mtm.long_balance_change_pct < threshold:
+                        continue
 
             # 株式分割調整済みBPS（adj_factor は手動入力データでは 1.0 のまま）
             effective_bps = (
@@ -490,6 +536,8 @@ class ScreeningUseCase:
                         long_balance=margin.long_balance if margin else None,
                         short_balance=margin.short_balance if margin else None,
                         long_balance_change=margin.long_balance_change if margin else None,
+                        long_balance_change_pct=mtm.long_balance_change_pct,
+                        long_balance_trend=mtm.long_balance_trend,
                         price_position_52w=tm.price_position_52w,
                         near_52w_high=tm.near_52w_high,
                         distance_from_52w_high=tm.distance_from_52w_high,
@@ -555,6 +603,8 @@ class ScreeningUseCase:
                         long_balance=margin.long_balance if margin else None,
                         short_balance=margin.short_balance if margin else None,
                         long_balance_change=margin.long_balance_change if margin else None,
+                        long_balance_change_pct=mtm.long_balance_change_pct,
+                        long_balance_trend=mtm.long_balance_trend,
                         price_position_52w=tm.price_position_52w,
                         near_52w_high=tm.near_52w_high,
                         distance_from_52w_high=tm.distance_from_52w_high,

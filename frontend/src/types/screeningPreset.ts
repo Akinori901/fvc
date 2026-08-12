@@ -17,6 +17,9 @@ export interface ScreeningFilters {
   owner_managed_only: boolean;
   min_fcf_yield: number | null;
   min_overall_score: number | null;
+  long_balance_trend: "increasing" | "decreasing" | null;
+  margin_trend_months: number;
+  margin_trend_threshold_pct: number | null;
 }
 
 export const DEFAULT_FILTERS: ScreeningFilters = {
@@ -38,6 +41,9 @@ export const DEFAULT_FILTERS: ScreeningFilters = {
   owner_managed_only: false,
   min_fcf_yield: null,
   min_overall_score: null,
+  long_balance_trend: null,
+  margin_trend_months: 2,
+  margin_trend_threshold_pct: null,
 };
 
 export interface ScreeningPreset {

@@ -1,7 +1,10 @@
 """割安株スクリーニングAPIビュー。"""
 
+import hashlib
+import json
 from decimal import Decimal, InvalidOperation
 
+from django.core.cache import cache
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -24,6 +27,17 @@ class ScreeningView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request: Request) -> Response:
+        # キャッシュキー生成
+        params_key = hashlib.md5(
+            json.dumps(sorted(request.query_params.items()), ensure_ascii=False).encode()
+        ).hexdigest()
+        cache_key = f"screening:v1:{params_key}"
+
+        # キャッシュ確認
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
         growth_rate = _parse_decimal(request.query_params.get("growth_rate"), Decimal("0.05"))
         min_discount = _parse_decimal_or_none(request.query_params.get("min_discount"))
         sector = request.query_params.get("sector") or None
@@ -42,6 +56,19 @@ class ScreeningView(APIView):
         min_momentum_signal = request.query_params.get("min_momentum_signal") or None
         owner_managed_only = request.query_params.get("owner_managed_only", "false").lower() == "true"
         min_fcf_yield = _parse_decimal_or_none(request.query_params.get("min_fcf_yield"))
+        # 信用買残トレンド（1〜12ヶ月）
+        margin_trend_months = _parse_int_or_none(request.query_params.get("margin_trend_months"))
+        if margin_trend_months is not None and not 1 <= margin_trend_months <= 12:  # noqa: PLR2004
+            margin_trend_months = None
+        long_balance_trend = request.query_params.get("long_balance_trend") or None
+        if long_balance_trend not in ("increasing", "decreasing", None):
+            long_balance_trend = None
+        margin_trend_threshold_pct = _parse_decimal_or_none(request.query_params.get("margin_trend_threshold_pct"))
+        if margin_trend_threshold_pct is not None:
+            margin_trend_threshold_pct = abs(margin_trend_threshold_pct)
+        # トレンド指定があるのに期間が無い場合は既定 2ヶ月とする
+        if long_balance_trend is not None and margin_trend_months is None:
+            margin_trend_months = 2
 
         usecase = ScreeningUseCase(
             stock_repo=stock_repository(),
@@ -70,12 +97,15 @@ class ScreeningView(APIView):
             min_momentum_signal=min_momentum_signal,
             owner_managed_only=owner_managed_only,
             min_fcf_yield=min_fcf_yield,
+            margin_trend_months=margin_trend_months,
+            long_balance_trend=long_balance_trend,
+            margin_trend_threshold_pct=margin_trend_threshold_pct,
         )
 
         def _s(v: object) -> str | None:
             return str(v) if v is not None else None
 
-        data = [
+        data: list[dict[str, object]] = [
             {
                 "code": r.code,
                 "name": r.name,
@@ -105,6 +135,8 @@ class ScreeningView(APIView):
                 "long_balance": r.long_balance,
                 "short_balance": r.short_balance,
                 "long_balance_change": r.long_balance_change,
+                "long_balance_change_pct": _s(r.long_balance_change_pct),
+                "long_balance_trend": r.long_balance_trend,
                 "price_position_52w": _s(r.price_position_52w),
                 "near_52w_high": r.near_52w_high,
                 "distance_from_52w_high": _s(r.distance_from_52w_high),
@@ -128,6 +160,8 @@ class ScreeningView(APIView):
             }
             for r in results
         ]
+        # キャッシュに保存
+        cache.set(cache_key, data, timeout=1800)  # 30分
         return Response(data)
 
 

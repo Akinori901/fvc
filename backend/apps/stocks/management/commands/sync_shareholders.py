@@ -35,6 +35,17 @@ class Command(BaseCommand):
             action="store_true",
             help="DB書き込みを行わない",
         )
+        parser.add_argument(
+            "--limit",
+            type=int,
+            default=None,
+            help="処理する書類数の上限（Lambda の実行時間上限対策。複数回に分けて実行する）",
+        )
+        parser.add_argument(
+            "--no-skip-processed",
+            action="store_true",
+            help="取得済みの書類も再取得する",
+        )
 
     def handle(self, *args: Any, **options: Any) -> None:
         from config.container import sync_shareholders_usecase
@@ -53,6 +64,8 @@ class Command(BaseCommand):
             to_date=to_date,
             codes=codes,
             dry_run=dry_run,
+            limit=options["limit"],
+            skip_processed=not options["no_skip_processed"],
         )
 
         self.stdout.write(
@@ -60,6 +73,11 @@ class Command(BaseCommand):
                 f"完了: processed={stats['processed']}, "
                 f"matched={stats['matched']}, "
                 f"skipped={stats['skipped']}, "
-                f"errors={stats['errors']}"
+                f"errors={stats['errors']}, "
+                f"remaining={stats['remaining']}"
             )
         )
+        if stats["remaining"]:
+            self.stdout.write(
+                self.style.WARNING(f"未処理が {stats['remaining']} 件あります。同じコマンドを再実行してください。")
+            )

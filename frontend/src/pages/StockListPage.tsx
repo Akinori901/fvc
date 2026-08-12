@@ -22,7 +22,6 @@ import ListIcon from "@mui/icons-material/List";
 import TuneIcon from "@mui/icons-material/Tune";
 import StarIcon from "@mui/icons-material/Star";
 import StarBorderIcon from "@mui/icons-material/StarBorder";
-import { useStocks } from "@/hooks/useStocks";
 import { useScreening } from "@/hooks/useScreening";
 import { useSyncTrigger } from "@/hooks/useSync";
 import { useWatchlist, useAddToWatchlist, useRemoveFromWatchlist } from "@/hooks/useWatchlist";
@@ -71,9 +70,6 @@ export default function StockListPage() {
     }
   }, [presets]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 銘柄データはセクター一覧の抽出のみに使用
-  const { data: stocks } = useStocks();
-
   // フィルターをAPIパラメータに変換
   const apiParams = useMemo(() => {
     if (mode !== "screening") {
@@ -97,6 +93,12 @@ export default function StockListPage() {
       min_momentum_signal: filters.min_momentum_signal ?? undefined,
       owner_managed_only: filters.owner_managed_only || undefined,
       min_fcf_yield: filters.min_fcf_yield ?? undefined,
+      long_balance_trend: filters.long_balance_trend ?? undefined,
+      // トレンド未指定のときは期間・閾値を送らない（不要な履歴取得を避ける）
+      margin_trend_months: filters.long_balance_trend ? filters.margin_trend_months : undefined,
+      margin_trend_threshold_pct: filters.long_balance_trend
+        ? (filters.margin_trend_threshold_pct ?? undefined)
+        : undefined,
     };
   }, [mode, growthRate, filters]);
 
@@ -112,8 +114,8 @@ export default function StockListPage() {
     [watchlist]
   );
 
-  const sectors = stocks
-    ? [...new Set(stocks.map((s) => s.sector).filter(Boolean))].sort()
+  const sectors = screeningResults
+    ? [...new Set(screeningResults.map((s) => s.sector).filter(Boolean))].sort()
     : [];
 
   // アクティブフィルター数（デフォルトと異なるフィールド数）
@@ -137,6 +139,8 @@ export default function StockListPage() {
     if (filters.owner_managed_only !== d.owner_managed_only) count++;
     if (filters.min_fcf_yield !== d.min_fcf_yield) count++;
     if (filters.min_overall_score !== d.min_overall_score) count++;
+    // 期間・閾値はトレンド指定とセットで意味を持つため、トレンドのみを1件として数える
+    if (filters.long_balance_trend !== d.long_balance_trend) count++;
     return count;
   }, [filters]);
 
@@ -703,6 +707,27 @@ export default function StockListPage() {
         if (params.value == null) return "-";
         const val = Number(params.value);
         return <Typography variant="body2">{val.toFixed(1)}%</Typography>;
+      },
+    },
+    {
+      field: "long_balance_change_pct",
+      headerName: "買残増減",
+      width: 100,
+      renderHeader: headerWithTooltip(
+        "買残増減",
+        "指定期間の信用買残の変化率。買残の減少は将来の売り圧力の低下を意味する"
+      ),
+      renderCell: (params) => {
+        if (params.value == null) return "-";
+        const val = Number(params.value);
+        // 買残の減少（マイナス）は需給改善なので good 扱い
+        const color = val < 0 ? "success.main" : val > 0 ? "error.main" : "text.secondary";
+        return (
+          <Typography variant="body2" color={color}>
+            {val > 0 ? "+" : ""}
+            {val.toFixed(1)}%
+          </Typography>
+        );
       },
     },
     {
