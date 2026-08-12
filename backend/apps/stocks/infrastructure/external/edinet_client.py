@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import logging
+import re
 import time
 import zipfile
 from dataclasses import dataclass
@@ -14,6 +15,11 @@ logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://api.edinet-fsa.go.jp/api/v2"
 _REQUEST_INTERVAL = 4.0  # 秒（EDINET推奨: 3-5秒）
+
+# 企業内容等の開示に関する内閣府令
+_ORDINANCE_CODE_CORP = "010"
+# 有価証券報告書の様式コード
+_FORM_CODE_ANNUAL_REPORT = "030000"
 
 
 @dataclass
@@ -42,6 +48,14 @@ class EdinetClientService:
         self._api_key = api_key
         self._last_request_time: float = 0
 
+    def _auth_headers(self) -> dict[str, str]:
+        """APIキーはヘッダーで送る。
+
+        クエリパラメータに載せると httpx のリクエストログに
+        フルURLごと出力され、APIキーが平文で記録されてしまうため。
+        """
+        return {"Ocp-Apim-Subscription-Key": self._api_key}
+
     def fetch_documents(self, date_str: str) -> list[EdinetDocument]:
         """指定日の有価証券報告書一覧を取得。
 
@@ -53,12 +67,11 @@ class EdinetClientService:
         params = {
             "date": date_str,
             "type": "2",  # 有報
-            "Subscription-Key": self._api_key,
         }
 
         try:
             with httpx.Client(timeout=30) as client:
-                resp = client.get(url, params=params)
+                resp = client.get(url, params=params, headers=self._auth_headers())
                 resp.raise_for_status()
                 data = resp.json()
         except httpx.HTTPStatusError as e:
@@ -70,8 +83,8 @@ class EdinetClientService:
 
         results: list[EdinetDocument] = []
         for doc in data.get("results", []):
-            # 有報（ordinanceCode=010, formCode=030040）のみ
-            if doc.get("ordinanceCode") != "010" or doc.get("formCode") != "030040":
+            # 有報（ordinanceCode=010, formCode=030000）のみ
+            if doc.get("ordinanceCode") != _ORDINANCE_CODE_CORP or doc.get("formCode") != _FORM_CODE_ANNUAL_REPORT:
                 continue
             sec_code = doc.get("secCode")
             if not sec_code:
@@ -97,13 +110,14 @@ class EdinetClientService:
         self._rate_limit()
         url = f"{_BASE_URL}/documents/{doc_id}"
         params = {
-            "type": "5",  # XBRL + CSV
-            "Subscription-Key": self._api_key,
+            # type=1: 提出本文書・XBRL。大株主/代表者のテキストブロックはここにのみ含まれる
+            # （type=5 は監査報告書のCSVのみで、有報本体のXBRLが入っていない）
+            "type": "1",
         }
 
         try:
             with httpx.Client(timeout=60) as client:
-                resp = client.get(url, params=params)
+                resp = client.get(url, params=params, headers=self._auth_headers())
                 resp.raise_for_status()
         except httpx.HTTPStatusError as e:
             logger.warning("EDINET XBRL取得失敗 (doc=%s, status=%s)", doc_id, e.response.status_code)
@@ -143,6 +157,8 @@ class EdinetClientService:
             # 代表者情報テキストブロック
             if representative_html is None:
                 for tag_name in [
+                    # 有報の表紙に載る「役職名及び氏名」。実データで使われているのはこれ
+                    "TitleAndNameOfRepresentativeCoverPage",
                     "CompanyRepresentativeInformationTextBlock",
                     "BusinessManagerNameInformationTextBlock",
                 ]:
@@ -163,14 +179,31 @@ class EdinetClientService:
         )
 
     def _extract_text_block(self, xbrl_content: str, tag_suffix: str) -> str | None:
-        """XBRLコンテンツからテキストブロックを抽出。contextRef付きタグを検索。"""
-        import re
+        """XBRLコンテンツからテキストブロックを抽出。
 
-        # jpcrp_cor:MajorShareholdersTextBlock 等のタグを検索
-        pattern = rf"<[^>]*{re.escape(tag_suffix)}[^>]*>(.*?)</[^>]*{re.escape(tag_suffix)}>"
-        m = re.search(pattern, xbrl_content, re.DOTALL)
-        if m:
-            return m.group(1)
+        有報は inline XBRL 形式で、要素名はタグ名ではなく name 属性に入る:
+            <ix:nonNumeric contextRef="..." name="jpcrp_cor:MajorShareholdersTextBlock">
+        そのため name 属性を見て開始タグを特定し、対応する終了タグまでを取り出す。
+        """
+        # name="...MajorShareholdersTextBlock" を持つ開始タグを探す
+        start_pattern = rf'<(\w+(?::\w+)?)[^>]*name="[^"]*{re.escape(tag_suffix)}"[^>]*>'
+        m = re.search(start_pattern, xbrl_content)
+        if m is None:
+            return None
+
+        tag_name = m.group(1)
+        body = xbrl_content[m.end() :]
+
+        # 同名タグのネストを考慮して対応する終了タグを探す
+        token_pattern = rf"<(/?){re.escape(tag_name)}(?:\s[^>]*)?/?>"
+        depth = 1
+        for token in re.finditer(token_pattern, body):
+            if token.group(0).endswith("/>"):
+                continue  # 自己完結タグは深さに影響しない
+            depth += -1 if token.group(1) else 1
+            if depth == 0:
+                return body[: token.start()]
+
         return None
 
     def _rate_limit(self) -> None:

@@ -372,13 +372,28 @@ class DjangoFinancialRepository(FinancialRepository):
         return result
 
     def find_all_recent(self, limit: int = 4) -> dict[int, list[FinancialEntity]]:
-        """全銘柄の直近N件の財務データを一括取得。"""
+        """全銘柄の直近N件の財務データを一括取得（ウィンドウ関数でDB側絞り込み）。"""
         from collections import defaultdict
 
+        from django.db.models import F, Window
+        from django.db.models.functions import RowNumber
+
+        # ウィンドウ関数で各銘柄ごとに行番号を付与
+        qs = (
+            StockFinancial.objects.annotate(
+                rn=Window(
+                    expression=RowNumber(),
+                    partition_by=[F("stock_id")],
+                    order_by=F("fiscal_year").desc(),
+                )
+            )
+            .filter(rn__lte=limit)
+            .order_by("stock_id", "-fiscal_year")
+        )
+
         raw: dict[int, list[StockFinancial]] = defaultdict(list)
-        for obj in StockFinancial.objects.order_by("stock_id", "-fiscal_year"):
-            if len(raw[obj.stock_id]) < limit:
-                raw[obj.stock_id].append(obj)
+        for obj in qs:
+            raw[obj.stock_id].append(obj)
 
         return {sid: [self._to_entity(o) for o in objs] for sid, objs in raw.items()}
 
@@ -767,6 +782,24 @@ class DjangoMarginRepository(MarginRepository):
             obj.stock_id: self._to_entity(obj) for obj in MarginBalance.objects.filter(date=Subquery(max_date_subq))
         }
 
+    def find_all_recent(self, weeks: int) -> dict[int, list[MarginBalanceEntity]]:
+        """全銘柄の直近N週分の信用残高を一括取得（1クエリ）。
+
+        銘柄ごとの件数制限ではなく、最新公表日から weeks 週前を基準日として
+        日付で絞り込むことで N+1 を回避する。
+        """
+        from datetime import timedelta
+
+        latest_date = MarginBalance.objects.order_by("-date").values_list("date", flat=True).first()
+        if latest_date is None:
+            return {}
+
+        cutoff = latest_date - timedelta(weeks=weeks)
+        result: dict[int, list[MarginBalanceEntity]] = {}
+        for obj in MarginBalance.objects.filter(date__gte=cutoff).order_by("stock_id", "-date"):
+            result.setdefault(obj.stock_id, []).append(self._to_entity(obj))
+        return result
+
     def bulk_save(self, data_list: list[MarketMarginData], stock_map: dict[str, int]) -> int:
         saved = 0
         for data in data_list:
@@ -808,28 +841,27 @@ class DjangoOwnerShareholderRepository(OwnerShareholderRepository):
         return [self._to_entity(obj) for obj in OwnerShareholder.objects.filter(stock_id=stock_id)]
 
     def find_latest_by_stock_ids(self, stock_ids: list[int]) -> dict[int, list[OwnerShareholderEntity]]:
-        """各銘柄の最新年度データのみ取得。"""
-        from django.db.models import Max
+        """各銘柄の最新年度データのみ取得（相関サブクエリで1クエリに最適化）。"""
+        from django.db.models import OuterRef, Subquery
 
-        # 各銘柄の最新fiscal_yearを取得
-        latest_years = dict(
-            OwnerShareholder.objects.filter(stock_id__in=stock_ids)
-            .values_list("stock_id")
-            .annotate(max_fy=Max("fiscal_year"))
-            .values_list("stock_id", "max_fy")
-        )
-        if not latest_years:
+        if not stock_ids:
             return {}
 
-        # 最新年度のデータのみ取得
-        from django.db.models import Q
+        # 相関サブクエリ：各stock_idの最新fiscal_yearを取得
+        max_fy_subq = (
+            OwnerShareholder.objects.filter(stock_id=OuterRef("stock_id"))
+            .order_by("-fiscal_year")
+            .values("fiscal_year")[:1]
+        )
 
-        q = Q()
-        for sid, fy in latest_years.items():
-            q |= Q(stock_id=sid, fiscal_year=fy)
+        # 各銘柄の最新年度のデータのみ取得
+        qs = OwnerShareholder.objects.filter(
+            stock_id__in=stock_ids,
+            fiscal_year=Subquery(max_fy_subq),
+        )
 
         result: dict[int, list[OwnerShareholderEntity]] = {}
-        for obj in OwnerShareholder.objects.filter(q):
+        for obj in qs:
             entity = self._to_entity(obj)
             result.setdefault(obj.stock_id, []).append(entity)
         return result
@@ -865,6 +897,10 @@ class DjangoShareholderRawRepository(ShareholderRawRepository):
                 fiscal_year=entity.fiscal_year,
                 doc_id=entity.doc_id,
             )
+
+    def find_processed_doc_ids(self) -> set[str]:
+        """取得済みの doc_id 集合を返す（再実行時のスキップ判定用）。"""
+        return set(ShareholderRaw.objects.values_list("doc_id", flat=True).distinct())
 
     def find_by_stock_id(self, stock_id: int) -> list[ShareholderRawEntity]:
         return [

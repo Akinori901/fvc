@@ -127,7 +127,12 @@ export interface PortfolioAccount {
   margin_credit_type: MarginCreditType | null;
   margin_credit_type_display: string;
   margin_interest_rate: string | null;
+  // 取込漏れ警告。"no_detail"=明細欠落 / "stale"=更新が古い
+  import_warnings?: ImportWarning[];
 }
+
+// 口座の取込漏れ警告コード
+export type ImportWarning = 'no_detail' | 'stale';
 
 export interface PortfolioAccountInput {
   family_member_id: number;
@@ -337,6 +342,8 @@ export interface ShareDashboard {
   monthly_chart_total_baseline?: string | null;
   // 現在の総資産 (total_value_jpy と同等)。MTD 分子用。
   monthly_chart_total_current?: string | null;
+  // 取込漏れ警告の種別ごとの口座数（例: { no_detail: 2, stale: 1 }）
+  import_warning_counts?: Record<string, number>;
 }
 
 // 資産推移関連

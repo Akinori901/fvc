@@ -62,15 +62,6 @@ const emptyHolding = (): HoldingRow => ({
   built_date: "",
 });
 
-// YYYY-MM → YYYY-MM-01 (月の最終日に近い形)
-const toSnapshotDate = (month: string) => {
-  const [y, m] = month.split("-").map(Number) as [number, number];
-  const lastDay = new Date(y, m, 0).getDate();
-  return `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-};
-
-const toMonthValue = (dateStr: string) => dateStr.slice(0, 7);
-
 export default function AccountInputPage() {
   const { id } = useParams<{ id: string }>();
   const accountId = Number(id);
@@ -83,10 +74,10 @@ export default function AccountInputPage() {
 
   const account = accounts.find((a) => a.id === accountId);
 
-  // 選択中の月
-  const currentMonth = new Date();
-  const defaultMonth = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}`;
-  const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
+  // 選択中の記録日（任意日付。同一口座で日別にスナップショットを持てる）
+  const today = new Date();
+  const defaultDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const [selectedDate, setSelectedDate] = useState(defaultDate);
 
   // フォーム状態
   const [totalValue, setTotalValue] = useState("");
@@ -97,9 +88,9 @@ export default function AccountInputPage() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // 選択月のスナップショットがあれば読み込む
+  // 選択日のスナップショットがあれば読み込む（日付の完全一致）
   useEffect(() => {
-    const snap = snapshots.find((s) => toMonthValue(s.snapshot_date) === selectedMonth);
+    const snap = snapshots.find((s) => s.snapshot_date === selectedDate);
     if (snap) {
       setTotalValue(snap.total_value_jpy);
       setTotalCost(snap.total_cost_jpy ?? "");
@@ -126,7 +117,7 @@ export default function AccountInputPage() {
     }
     setSaveSuccess(false);
     setSaveError(null);
-  }, [selectedMonth, snapshots]);
+  }, [selectedDate, snapshots]);
 
   const handleAddHolding = () => setHoldings((prev) => [...prev, emptyHolding()]);
   const handleRemoveHolding = (i: number) =>
@@ -143,7 +134,7 @@ export default function AccountInputPage() {
   const handleSave = () => {
     if (!totalValue) return;
     setSaveError(null);
-    const snapshotDate = toSnapshotDate(selectedMonth);
+    const snapshotDate = selectedDate;
     const holdingData: AccountHolding[] = holdings
       .filter((h) => h.asset_name && h.value_jpy)
       .map((h) => ({
@@ -186,13 +177,13 @@ export default function AccountInputPage() {
   };
 
   const handleDelete = () => {
-    const snap = snapshots.find((s) => toMonthValue(s.snapshot_date) === selectedMonth);
+    const snap = snapshots.find((s) => s.snapshot_date === selectedDate);
     if (!snap) return;
     if (!window.confirm("このスナップショットを削除しますか？")) return;
     deleteMutation.mutate({ accountId, date: snap.snapshot_date });
   };
 
-  const existingSnap = snapshots.find((s) => toMonthValue(s.snapshot_date) === selectedMonth);
+  const existingSnap = snapshots.find((s) => s.snapshot_date === selectedDate);
   const isUsd = account?.currency === "USD";
 
   return (
@@ -225,14 +216,15 @@ export default function AccountInputPage() {
       <Card>
         <CardContent>
           <Stack spacing={3}>
-            {/* 月選択 */}
+            {/* 記録日選択（任意日付。同一月でも日別に登録できる） */}
             <TextField
-              label="記録月"
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
+              label="記録日"
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
               slotProps={{ inputLabel: { shrink: true } }}
               sx={{ width: 200 }}
+              helperText={existingSnap ? "この日付の記録を編集中" : "新規に記録"}
             />
 
             <Divider />
@@ -453,9 +445,9 @@ export default function AccountInputPage() {
                 variant="outlined"
                 sx={{
                   cursor: "pointer",
-                  bgcolor: toMonthValue(s.snapshot_date) === selectedMonth ? "action.selected" : "inherit",
+                  bgcolor: s.snapshot_date === selectedDate ? "action.selected" : "inherit",
                 }}
-                onClick={() => setSelectedMonth(toMonthValue(s.snapshot_date))}
+                onClick={() => setSelectedDate(s.snapshot_date)}
               >
                 <CardContent sx={{ py: 1, "&:last-child": { pb: 1 } }}>
                   <Stack direction="row" justifyContent="space-between">

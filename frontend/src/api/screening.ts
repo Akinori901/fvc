@@ -20,6 +20,9 @@ export interface ScreeningParams {
   min_momentum_signal?: "strong_buy" | "buy" | "neutral" | "caution" | "sell";
   owner_managed_only?: boolean;
   min_fcf_yield?: number;
+  long_balance_trend?: "increasing" | "decreasing";
+  margin_trend_months?: number;
+  margin_trend_threshold_pct?: number;
 }
 
 export const screeningApi = {

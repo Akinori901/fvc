@@ -174,11 +174,34 @@ class DjangoAccountSnapshotRepository(AccountSnapshotRepository):
             for s in Stock.objects.filter(code__in=ticker_codes_to_resolve).only("id", "code"):
                 stock_id_map[s.code] = s.pk
 
+        # proxy_stock_id 自動リンク: 投信(asset_type="fund" かつ ticker_code なし)は
+        # 銘柄名から proxy ETF を解決する。設定しないと MTD 日次変動計算で取りこぼされる。
+        # entity 側に既に proxy_stock_id があればそれを優先。
+        from apps.portfolios.application.services.fund_proxy_service import resolve_proxy_code
+
+        proxy_codes_to_resolve = {
+            code
+            for h in entity.holdings
+            if h.proxy_stock_id is None
+            and h.asset_type == "fund"
+            and not h.ticker_code
+            and (code := resolve_proxy_code(h.asset_name)) is not None
+        }
+        proxy_code_map: dict[str, int] = {}
+        if proxy_codes_to_resolve:
+            for s in Stock.objects.filter(code__in=proxy_codes_to_resolve).only("id", "code"):
+                proxy_code_map[s.code] = s.pk
+
         for h in entity.holdings:
             resolved_stock_id = h.stock_id or stock_id_map.get(h.ticker_code or "")
+            resolved_proxy_id = h.proxy_stock_id
+            if resolved_proxy_id is None and h.asset_type == "fund" and not h.ticker_code:
+                proxy_code = resolve_proxy_code(h.asset_name)
+                resolved_proxy_id = proxy_code_map.get(proxy_code) if proxy_code else None
             AccountHolding.objects.create(
                 snapshot=obj,
                 stock_id=resolved_stock_id,
+                proxy_stock_id=resolved_proxy_id,
                 ticker_code=h.ticker_code,
                 asset_name=h.asset_name,
                 asset_type=h.asset_type,

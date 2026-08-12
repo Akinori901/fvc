@@ -29,6 +29,9 @@ export interface ScreeningResult {
   long_balance: number | null;
   short_balance: number | null;
   long_balance_change: number | null;
+  // 信用買残トレンド（指定期間の増減）
+  long_balance_change_pct: string | null;
+  long_balance_trend: "increasing" | "decreasing" | "flat" | null;
   // テクニカル指標（52週高値効果）
   price_position_52w: string | null;
   near_52w_high: boolean | null;

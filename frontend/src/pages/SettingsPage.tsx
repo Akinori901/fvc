@@ -25,6 +25,7 @@ import { useApiConfigs, useUpdateApiConfig } from "@/hooks/useSettings";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
 import AiConfigSection from "@/components/settings/AiConfigSection";
 import McpApiKeySection from "@/components/settings/McpApiKeySection";
+import EdinetConfigSection from "@/components/settings/EdinetConfigSection";
 import {
   changeCognitoPassword,
   confirmCognitoEmailUpdate,
@@ -358,6 +359,9 @@ export default function SettingsPage() {
               </Stack>
             </CardContent>
           </Card>
+
+          {/* EDINET 設定（大株主データ = オーナー経営判定に使用） */}
+          <EdinetConfigSection />
 
           {/* プラン別機能比較 */}
           <Card>

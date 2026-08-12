@@ -1,5 +1,6 @@
 import { useRef, useCallback } from "react";
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -14,6 +15,7 @@ import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon from "@mui/icons-material/TrendingDown";
 import SaveAltIcon from "@mui/icons-material/SaveAlt";
 import IosShareIcon from "@mui/icons-material/IosShare";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import {
   ComposedChart,
   Area,
@@ -28,12 +30,13 @@ import {
   Cell,
 } from "recharts";
 import { toPng } from "html-to-image";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
 import { useShareDashboard } from "@/hooks/useFamilyPortfolio";
 import { formatCurrency } from "@/utils/format";
 import { ASSET_CLASS_COLORS } from "@/types/familyPortfolio";
 import type { AssetClass } from "@/types/familyPortfolio";
+import { ROUTES } from "@/router/routes";
 
 const darkTheme = createTheme({
   palette: {
@@ -64,9 +67,15 @@ const INDEX_LINES = [
 
 export default function ShareDashboardPage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const memberParam = searchParams.get("member") ?? undefined;
   const { data, isLoading } = useShareDashboard(memberParam);
   const captureRef = useRef<HTMLDivElement>(null);
+
+  const handleBack = useCallback(() => {
+    const params = memberParam ? `?member=${memberParam}` : "";
+    navigate(`${ROUTES.PORTFOLIO}${params}`);
+  }, [navigate, memberParam]);
 
   const handleShareOrSave = useCallback(async () => {
     if (!captureRef.current) return;
@@ -137,7 +146,32 @@ export default function ShareDashboardPage() {
     );
   }
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <ThemeProvider theme={darkTheme}>
+        <CssBaseline />
+        <Box
+          sx={{
+            minHeight: "100vh",
+            bgcolor: "background.default",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 2,
+            px: 2,
+          }}
+        >
+          <Typography color="text.secondary">
+            共有データを取得できませんでした。
+          </Typography>
+          <Button onClick={handleBack} startIcon={<ArrowBackIcon />} variant="outlined">
+            ポートフォリオへ戻る
+          </Button>
+        </Box>
+      </ThemeProvider>
+    );
+  }
 
   const total = Number(data.total_value_jpy);
   const chart = data.monthly_chart;
@@ -171,6 +205,11 @@ export default function ShareDashboardPage() {
   const dodPct = data.dod_change_pct != null ? Number(data.dod_change_pct) : null;
   const unrealizedGain = data.unrealized_gain_jpy != null ? Number(data.unrealized_gain_jpy) : null;
   const totalCost = data.total_cost_jpy != null ? Number(data.total_cost_jpy) : null;
+
+  // 取込漏れ警告（本人向け。共有画像には含めない）
+  const warnCounts = data.import_warning_counts ?? {};
+  const noDetailCount = warnCounts.no_detail ?? 0;
+  const staleCount = warnCounts.stale ?? 0;
   const unrealizedPct = unrealizedGain !== null && totalCost !== null && totalCost > 0
     ? (unrealizedGain / totalCost) * 100
     : null;
@@ -211,6 +250,15 @@ export default function ShareDashboardPage() {
         }}
       >
         <Box sx={{ maxWidth: 480, width: "100%" }}>
+          {/* 戻る導線（captureRef の外 = 共有画像には写らない） */}
+          <Button
+            onClick={handleBack}
+            startIcon={<ArrowBackIcon />}
+            size="small"
+            sx={{ mb: 1, color: "text.secondary" }}
+          >
+            ポートフォリオへ戻る
+          </Button>
           <Box ref={captureRef} sx={{ px: 1, pb: 2 }}>
           {/* ヘッダー */}
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
@@ -466,6 +514,15 @@ export default function ShareDashboardPage() {
             Fair Value Calculator
           </Typography>
           </Box>{/* captureRef end */}
+
+          {(noDetailCount > 0 || staleCount > 0) && (
+            <Alert severity="warning" variant="outlined" sx={{ mt: 2 }}>
+              一部の口座で最新データが反映されていない可能性があります。
+              {noDetailCount > 0 && ` 明細なし ${noDetailCount}件`}
+              {staleCount > 0 && ` 更新が古い ${staleCount}件`}
+              。信用・iDeCo・ジュニアNISA等は専用CSVの取り込みが必要です（口座一覧でご確認ください）。
+            </Alert>
+          )}
 
           <Button
             variant="contained"

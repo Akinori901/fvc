@@ -12,8 +12,10 @@ from decimal import Decimal
 import pytest
 from django.contrib.auth import get_user_model
 
+from apps.portfolios.domain.entities import AccountHoldingEntity, AccountSnapshotEntity
 from apps.portfolios.infrastructure.repositories import DjangoAccountSnapshotRepository
-from apps.portfolios.models import AccountSnapshot, FamilyMember, PortfolioAccount
+from apps.portfolios.models import AccountHolding, AccountSnapshot, FamilyMember, PortfolioAccount
+from apps.stocks.models import Stock
 
 
 @pytest.mark.django_db
@@ -189,3 +191,85 @@ class TestFindEachAccountLatestBefore:
         result = repo.find_each_account_latest_before(user_id, "2026-04-30")
 
         assert result == []
+
+
+@pytest.mark.django_db
+class TestSaveProxyAutoLink:
+    """save() が投信の proxy_stock_id を銘柄名から自動解決することを検証。
+
+    CSV取込・API どちらの経路でも Repository.save() を通るため、ここで一元的に紐付く。
+    """
+
+    def _setup(self) -> tuple[int, int, int]:
+        """user_id, fund口座id, proxyETF(1557)のStock.pk を返す。"""
+        user = get_user_model().objects.create_user(username="proxy_test", email="proxy@example.com", password="x")
+        member = FamilyMember.objects.create(user=user, name="本人", role="self")
+        acc = PortfolioAccount.objects.create(
+            family_member=member,
+            institution="楽天証券",
+            institution_type="securities_jp",
+            asset_class="fund",
+            trading_type="spot",
+            nickname="特定",
+            currency="JPY",
+        )
+        proxy = Stock.objects.create(code="1557", name="SPDR S&P500 ETF")
+        return user.pk, acc.pk, proxy.pk
+
+    def _save_fund_holding(
+        self, user_id: int, account_id: int, asset_name: str, proxy_stock_id: int | None = None
+    ) -> AccountHolding:
+        entity = AccountSnapshotEntity(
+            id=None,
+            account_id=account_id,
+            snapshot_date="2026-07-07",
+            total_value_jpy=Decimal("100000"),
+            holdings=[
+                AccountHoldingEntity(
+                    id=None,
+                    snapshot_id=0,
+                    asset_name=asset_name,
+                    asset_type="fund",
+                    value_jpy=Decimal("100000"),
+                    quantity=Decimal("10000"),
+                    proxy_stock_id=proxy_stock_id,
+                )
+            ],
+        )
+        DjangoAccountSnapshotRepository().save(entity, user_id)
+        return AccountHolding.objects.get(snapshot__account_id=account_id, asset_name=asset_name)
+
+    def test_matched_fund_gets_proxy_auto_linked(self) -> None:
+        user_id, acc_id, proxy_pk = self._setup()
+        h = self._save_fund_holding(user_id, acc_id, "eMAXIS Slim 米国株式(S&P500)")
+        assert h.proxy_stock_id == proxy_pk
+
+    def test_unmatched_fund_stays_null(self) -> None:
+        user_id, acc_id, _ = self._setup()
+        # 外国REIT はマッピング対象外 → proxy は NULL のまま
+        h = self._save_fund_holding(user_id, acc_id, "三井住友・DC外国リートインデックスファンド")
+        assert h.proxy_stock_id is None
+
+    def test_matched_fund_without_registered_etf_stays_null(self) -> None:
+        # 名前はマッチするが対応 proxy ETF が m_stocks に未登録なら NULL
+        user = get_user_model().objects.create_user(username="p2", email="p2@example.com", password="x")
+        member = FamilyMember.objects.create(user=user, name="本人", role="self")
+        acc = PortfolioAccount.objects.create(
+            family_member=member,
+            institution="楽天証券",
+            institution_type="securities_jp",
+            asset_class="fund",
+            trading_type="spot",
+            nickname="特定",
+            currency="JPY",
+        )
+        # 1557 を登録しないので "S&P500" 名でもコードは解決されるが pk は引けない
+        h = self._save_fund_holding(user.pk, acc.pk, "eMAXIS Slim 米国株式(S&P500)")
+        assert h.proxy_stock_id is None
+
+    def test_explicit_proxy_id_is_respected(self) -> None:
+        user_id, acc_id, proxy_pk = self._setup()
+        other = Stock.objects.create(code="1321", name="日経225 ETF")
+        # entity に明示的な proxy_stock_id があれば自動解決より優先される
+        h = self._save_fund_holding(user_id, acc_id, "eMAXIS Slim 米国株式(S&P500)", proxy_stock_id=other.pk)
+        assert h.proxy_stock_id == other.pk

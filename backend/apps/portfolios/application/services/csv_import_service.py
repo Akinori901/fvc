@@ -5,6 +5,7 @@
 - rakuten_margin: 楽天証券「信用取引 建玉一覧」CSV
 - rakuten_ideco: 楽天証券 iDeCo CSV
 - rakuten_fund: 楽天証券「保有商品（投資信託）」CSV
+- rakuten_junior_nisa: 楽天証券 ジュニアNISA CSV（assetbalance(INVST)、口座区分を「ジュニアNISA」に固定）
 - sbi_portfolio: SBI証券「My資産 → ポートフォリオ」CSV (投信MVP)
 - sbi_margin: SBI証券「信用建玉一覧」CSV (marginbalance(JP)_*.csv)
 """
@@ -612,6 +613,33 @@ class RakutenFundCsvParser(CsvParser):
         )
 
 
+# ジュニアNISA口座の nickname（口座区分）。
+# INVST(ジュニアNISA単独DL)では口座区分列が "NISA" になるが、
+# 全体DL(assetbalance(all))側では "ジュニアNISA" として現れる。
+# 両者を同一口座に集約するため、専用取込口ではこの値に固定する。
+_JUNIOR_NISA_NICKNAME = "ジュニアNISA"
+
+
+class RakutenJuniorNisaCsvParser(CsvParser):
+    """楽天証券 ジュニアNISA CSV（assetbalance(INVST)）パーサー。
+
+    CSVフォーマットは RakutenFundCsvParser（投資信託CSV）と同一だが、
+    ジュニアNISAの単独ダウンロードでは口座区分列が "NISA" になり、
+    そのままでは全体DL側の "ジュニアNISA" 口座と別口座に分かれてしまう。
+
+    このパーサーは RakutenFundCsvParser でパースした結果の口座区分を
+    すべて "ジュニアNISA" に上書きすることで、18歳到達後に全体DLへ移行
+    しても同一口座に継続して集約されるようにする。
+    """
+
+    def parse(self, file: UploadedFile, snapshot_date: str) -> CsvParseResult:
+        result = RakutenFundCsvParser().parse(file, snapshot_date)
+        for group in result.account_groups:
+            group.account_type_raw = _JUNIOR_NISA_NICKNAME
+        result.provider = "rakuten_junior_nisa"
+        return result
+
+
 # ============================================================
 # SBI証券 ポートフォリオパーサー
 # ============================================================
@@ -924,6 +952,7 @@ _PARSERS: dict[str, type[CsvParser]] = {
     "rakuten_margin": RakutenMarginCsvParser,
     "rakuten_ideco": RakutenIdecoCsvParser,
     "rakuten_fund": RakutenFundCsvParser,
+    "rakuten_junior_nisa": RakutenJuniorNisaCsvParser,
     "sbi_portfolio": SbiPortfolioCsvParser,
     "sbi_margin": SbiMarginCsvParser,
 }

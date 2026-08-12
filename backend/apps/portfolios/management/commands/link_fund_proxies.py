@@ -4,36 +4,12 @@ from typing import Any
 
 from django.core.management.base import BaseCommand, CommandParser
 
+from apps.portfolios.application.services.fund_proxy_service import (
+    FUND_PROXY_MAP,
+    resolve_proxy_code,
+)
 from apps.portfolios.models import AccountHolding
 from apps.stocks.models import Stock
-
-# asset_name の部分一致 → プロキシETFコード（先頭から優先マッチ）
-FUND_PROXY_MAP: list[tuple[str, str]] = [
-    ("S&P500", "1557"),
-    ("Ｓ＆Ｐ５００", "1557"),
-    ("米国株式", "1557"),
-    ("米国成長株", "1557"),
-    ("全米株式", "VTI"),
-    ("VTI", "VTI"),
-    ("オールカントリー", "ACWI"),
-    ("オール・カントリー", "ACWI"),
-    ("全世界株式", "ACWI"),
-    ("FANG+", "QQQ"),
-    ("ＦＡＮＧ", "QQQ"),
-    ("NASDAQ", "1545"),
-    ("ＮＡＳＤＡＱ", "1545"),
-    ("日経225", "1321"),
-    ("日経平均", "1321"),
-    ("日本株", "1321"),
-    ("国内株", "1321"),
-    ("TOPIX", "1321"),
-    ("中小型", "1321"),
-    ("先進国株式", "1550"),
-    ("インド", "1678"),
-    ("ゴールド", "GLD"),
-    ("Gold", "GLD"),
-    ("おおぶね", "1557"),
-]
 
 
 class Command(BaseCommand):
@@ -63,11 +39,7 @@ class Command(BaseCommand):
         linked = 0
         skipped = 0
         for holding in targets:
-            matched_code: str | None = None
-            for keyword, code in FUND_PROXY_MAP:
-                if keyword in holding.asset_name:
-                    matched_code = code
-                    break
+            matched_code = resolve_proxy_code(holding.asset_name)
 
             if matched_code and matched_code in code_to_pk:
                 proxy_pk = code_to_pk[matched_code]

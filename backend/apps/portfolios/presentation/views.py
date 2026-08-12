@@ -192,9 +192,32 @@ class PortfolioAccountListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request: Request) -> Response:
+        from apps.portfolios.application.services.import_freshness_service import (
+            detect_account_warnings,
+        )
+
+        user_id = cast("int", request.user.pk)
         repo = DjangoPortfolioAccountRepository()
-        accounts = repo.find_by_user(cast("int", request.user.pk))
-        return Response([_account_to_dict(a) for a in accounts])
+        accounts = repo.find_by_user(user_id)
+
+        # 取込漏れ警告のため各口座の最新スナップショットを取得
+        snapshot_repo = DjangoAccountSnapshotRepository()
+        latest_by_account = {s.account_id: s for s in snapshot_repo.find_latest_by_user(user_id)}
+        today = datetime.date.today()
+
+        rows = []
+        for a in accounts:
+            d = _account_to_dict(a)
+            snap = latest_by_account.get(cast("int", a.id))
+            d["import_warnings"] = detect_account_warnings(
+                asset_class=a.asset_class,
+                latest_snapshot_date=snap.snapshot_date if snap else None,
+                holdings_count=len(snap.holdings) if snap else 0,
+                total_value=float(snap.total_value_jpy) if snap else 0.0,
+                as_of_date=today,
+            )
+            rows.append(d)
+        return Response(rows)
 
     def post(self, request: Request) -> Response:
         serializer = PortfolioAccountSerializer(data=request.data)
@@ -802,6 +825,7 @@ class CsvImportView(APIView):
                         "rakuten_margin": "楽天証券",
                         "rakuten_ideco": "楽天証券",
                         "rakuten_fund": "楽天証券",
+                        "rakuten_junior_nisa": "楽天証券",
                         "sbi": "SBI証券",
                         "sbi_portfolio": "SBI証券",
                         "sbi_margin": "SBI証券",
@@ -845,6 +869,7 @@ class CsvImportView(APIView):
             "rakuten_margin": "楽天証券",
             "rakuten_ideco": "楽天証券",
             "rakuten_fund": "楽天証券",
+            "rakuten_junior_nisa": "楽天証券",
             "sbi": "SBI証券",
             "sbi_portfolio": "SBI証券",
             "sbi_margin": "SBI証券",
@@ -868,6 +893,9 @@ class CsvImportView(APIView):
         if all_ticker_codes:
             for s in Stock.objects.filter(code__in=all_ticker_codes).only("id", "code"):
                 stock_id_map[s.code] = s.pk
+
+        # 投信 → プロキシETF の自動紐付けは Repository.save() 側で一元的に解決する
+        # （stock_id の自動リンクと同じ層。API/コマンド等どの経路でも紐付く）。
 
         created_count = 0
         updated_count = 0
@@ -1454,6 +1482,25 @@ class ShareDashboardView(APIView):
             dod_change_jpy = "0"
             dod_change_pct = "0.00"
 
+        # ── 取込漏れ警告の集計 ──
+        # 共有ダッシュボードは匿名のため口座名は出さず、警告種別ごとの口座数のみ返す。
+        # データの正確性（明細欠落/更新停止で日次変動が反映されない口座がある）を示す。
+        from apps.portfolios.application.services.import_freshness_service import (
+            detect_account_warnings,
+        )
+
+        warning_counts: dict[str, int] = {}
+        for acc in filtered_accounts:
+            snap = latest_by_account.get(cast("int", acc.id))
+            for w in detect_account_warnings(
+                asset_class=acc.asset_class,
+                latest_snapshot_date=snap.snapshot_date if snap else None,
+                holdings_count=len(snap.holdings) if snap else 0,
+                total_value=float(snap.total_value_jpy) if snap else 0.0,
+                as_of_date=today,
+            ):
+                warning_counts[w] = warning_counts.get(w, 0) + 1
+
         # ── レスポンス ──
         return Response(
             {
@@ -1477,6 +1524,7 @@ class ShareDashboardView(APIView):
                     str(monthly_chart_total_baseline) if monthly_chart_total_baseline is not None else None
                 ),
                 "monthly_chart_total_current": str(int(total_value)),
+                "import_warning_counts": warning_counts,
             }
         )
 

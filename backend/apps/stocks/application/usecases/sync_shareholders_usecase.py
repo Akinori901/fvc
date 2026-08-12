@@ -46,6 +46,8 @@ class SyncShareholdersUseCase:
         to_date: str,
         codes: list[str] | None = None,
         dry_run: bool = False,
+        limit: int | None = None,
+        skip_processed: bool = True,
     ) -> dict[str, int]:
         """大株主データを同期。
 
@@ -54,9 +56,15 @@ class SyncShareholdersUseCase:
             to_date: 終了日（"YYYY-MM-DD"）
             codes: 対象証券コード（None=全銘柄）
             dry_run: True の場合はDB書き込みを行わない
+            limit: この件数を処理したら打ち切る（Lambda の実行時間上限対策）
+            skip_processed: 取得済み doc_id を再取得しない（再実行で続きから進める）
 
         Returns:
-            {"processed": N, "matched": N, "skipped": N, "errors": N}
+            {"processed": N, "matched": N, "skipped": N, "errors": N, "remaining": N}
+
+        有報1件ごとにXBRLのZIP取得とレート制限待ちが入るため、
+        件数が多い日は1回の実行で終わらない。limit で区切って複数回実行し、
+        skip_processed により前回の続きから進める運用を想定している。
         """
         from datetime import date, timedelta
 
@@ -66,7 +74,15 @@ class SyncShareholdersUseCase:
         # 証券コード→stock_id のマップを構築
         stock_map = self._build_stock_map(codes)
 
-        stats = {"processed": 0, "matched": 0, "skipped": 0, "errors": 0}
+        processed_doc_ids: set[str] = set()
+        if skip_processed and not dry_run:
+            try:
+                processed_doc_ids = self._raw_repo.find_processed_doc_ids()
+                logger.info("取得済み書類: %d 件（スキップ対象）", len(processed_doc_ids))
+            except NotImplementedError:
+                logger.warning("取得済み判定に非対応のため全件処理します")
+
+        stats = {"processed": 0, "matched": 0, "skipped": 0, "errors": 0, "remaining": 0}
 
         current = start
         while current <= end:
@@ -94,6 +110,15 @@ class SyncShareholdersUseCase:
                     stats["skipped"] += 1
                     continue
 
+                # 取得済みは再取得しない（再実行で続きから進めるため）
+                if doc.doc_id in processed_doc_ids:
+                    continue
+
+                # 実行時間上限に達したら残件を報告して打ち切る
+                if limit is not None and stats["processed"] >= limit:
+                    stats["remaining"] += 1
+                    continue
+
                 try:
                     self._process_document(doc, stock_code, stock_map[stock_code], dry_run, stats)
                 except Exception:
@@ -108,11 +133,12 @@ class SyncShareholdersUseCase:
             current += timedelta(days=1)
 
         logger.info(
-            "大株主同期完了: processed=%d, matched=%d, skipped=%d, errors=%d",
+            "大株主同期完了: processed=%d, matched=%d, skipped=%d, errors=%d, remaining=%d",
             stats["processed"],
             stats["matched"],
             stats["skipped"],
             stats["errors"],
+            stats["remaining"],
         )
         return stats
 

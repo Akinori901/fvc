@@ -5,6 +5,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.permissions import IsSuperUser
 from apps.stocks.models import ApiConfig
 
 # J-Quantsプラン別の機能マッピング
@@ -65,7 +66,8 @@ class ApiConfigListView(APIView):
 
 
 class ApiConfigDetailView(APIView):
-    permission_classes = [IsAuthenticated]
+    # APIキーの書き換えは管理者のみに限定する
+    permission_classes = [IsSuperUser]
 
     def put(self, request: Request, provider: str) -> Response:
         try:

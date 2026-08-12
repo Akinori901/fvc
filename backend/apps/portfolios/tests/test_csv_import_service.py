@@ -8,6 +8,8 @@ from decimal import Decimal
 import pytest
 
 from apps.portfolios.application.services.csv_import_service import (
+    CsvParseResult,
+    RakutenJuniorNisaCsvParser,
     SbiMarginCsvParser,
     SbiPortfolioCsvParser,
     _detect_sbi_section,
@@ -216,3 +218,65 @@ class TestSbiMarginCsvParser:
         result = parser.parse(_FakeUploadedFile(raw), "2026-05-28")  # type: ignore[arg-type]
         assert result.provider == "sbi_margin"
         assert result.account_groups == []
+
+
+# 楽天証券 ジュニアNISA CSV (assetbalance(INVST)、Shift-JIS、21列)。
+# 実データ: 娘のジュニアNISA単独DL。口座区分列は "NISA" だが取込では
+# nickname を "ジュニアNISA" に固定して既存口座に集約する。
+# 列: 0保有区分,1口座区分,2ファンド,3分配金コース,4保有数量,5内訳通常,6内訳積立,
+#     7平均取得価額,8取得総額,9基準価額,10前日比,11前月比,12時価評価額,13評価損益,
+#     14評価損益%,15トータルリターン,16-20(外貨関連,当口座は"-")
+_JUNIOR_NISA_CSV_TEXT = (
+    "保有区分,口座区分,ファンド,分配金コース,保有数量[口],(内訳)通常[口],(内訳)積立[口],"
+    "平均取得価額[円],取得総額[円],基準価額[円],基準価額(前日比)[円],基準価額(前月比)[円],"
+    "時価評価額[円],評価損益[円],評価損益[％],トータルリターン[円],評価金額通貨単位,買付余力,参考為替,評価額(外貨),評価額[円]\r\n"
+    '"娘","NISA","楽天・S&P500インデックス・ファンド（楽天・VTI）","再投資","52,354","9,399","42,955",'
+    '"23,255.15","121,750","45,493","-144","457","238,174","116,424","95.62","116,424","-","-","-","-","-"\r\n'
+    '"娘","NISA","eMAXIS Slim 国内株式（日経平均）","再投資","63,883","0","63,883",'
+    '"15,105.74","96,499","31,747","-1,333","-2,932","202,809","106,309","110.16","106,309","-","-","-","-","-"\r\n'
+    '"娘","NISA","eMAXIS Slim 米国株式（S&P500）","再投資","53,470","9,606","43,864",'
+    '"22,769.78","121,750","45,008","-150","609","240,658","118,908","97.66","118,908","-","-","-","-","-"\r\n'
+    '"娘","NISA","eMAXIS Slim 全世界株式（オール・カントリー）","再投資","46,504","11,061","35,443",'
+    '"19,729.49","91,750","38,338","-188","321","178,287","86,537","94.31","86,537","-","-","-","-","-"\r\n'
+    '"娘","NISA","iFreeNEXT インド株インデックス","再投資","91,056","55,208","35,848",'
+    '"12,107.93","110,249","14,206","15","-158","129,354","19,104","17.32","19,104","-","-","-","-","-"\r\n'
+)
+
+
+class TestRakutenJuniorNisaCsvParser:
+    def _parse(self) -> CsvParseResult:
+        raw = _JUNIOR_NISA_CSV_TEXT.encode("shift_jis")
+        parser = RakutenJuniorNisaCsvParser()
+        return parser.parse(_FakeUploadedFile(raw), "2026-07-21")  # type: ignore[arg-type]
+
+    def test_provider_is_junior_nisa(self) -> None:
+        result = self._parse()
+        assert result.provider == "rakuten_junior_nisa"
+
+    def test_all_holdings_in_single_junior_nisa_group(self) -> None:
+        """口座区分 "NISA" でも 1 グループにまとまり、nickname は "ジュニアNISA" に固定される。"""
+        result = self._parse()
+        assert len(result.account_groups) == 1
+        group = result.account_groups[0]
+        # 既存の「ジュニアNISA」口座に集約するためのキー
+        assert group.account_type_raw == "ジュニアNISA"
+        assert group.asset_class == "fund"
+        assert len(group.holdings) == 5
+
+    def test_totals_match_source_csv(self) -> None:
+        """8列目「取得総額」を取得原価に使う。評価額・原価が実データと一致すること。"""
+        result = self._parse()
+        group = result.account_groups[0]
+        # 時価評価額(12列目)の合計
+        assert group.total_value_jpy == Decimal("989282")
+        # 取得総額(8列目)の合計 = 正しい取得原価
+        assert group.total_cost_jpy == Decimal("541998")
+
+    def test_holding_fields_use_correct_columns(self) -> None:
+        result = self._parse()
+        vti = next(h for h in result.account_groups[0].holdings if "楽天・VTI" in h.asset_name)
+        assert vti.asset_type == "fund"
+        assert vti.quantity == Decimal("52354")  # 4列目 保有数量
+        assert vti.unit_price == Decimal("45493")  # 9列目 基準価額
+        assert vti.value_jpy == Decimal("238174")  # 12列目 時価評価額
+        assert vti.cost_jpy == Decimal("121750")  # 8列目 取得総額

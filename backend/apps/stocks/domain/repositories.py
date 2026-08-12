@@ -358,6 +358,10 @@ class MarginRepository(ABC):
         """全銘柄の最新信用残高を一括取得。{stock_id: entity}"""
         raise NotImplementedError
 
+    def find_all_recent(self, weeks: int) -> dict[int, list[MarginBalanceEntity]]:
+        """全銘柄の直近N週分の信用残高を一括取得。{stock_id: [entity, ...]}（date 降順）"""
+        raise NotImplementedError
+
     @abstractmethod
     def bulk_save(self, data_list: list[MarketMarginData], stock_map: dict[str, int]) -> int:
         """信用残高データを一括保存。戻り値: 保存件数"""
@@ -436,6 +440,10 @@ class ShareholderRawRepository(ABC):
 
     @abstractmethod
     def find_by_stock_id(self, stock_id: int) -> list[ShareholderRawEntity]: ...
+
+    def find_processed_doc_ids(self) -> set[str]:
+        """取得済みの doc_id 集合を返す（再実行時のスキップ判定用）。"""
+        raise NotImplementedError
 
 
 class ScreeningPresetRepository(ABC):
