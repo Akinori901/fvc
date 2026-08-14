@@ -25,6 +25,7 @@ import SaveIcon from "@mui/icons-material/Save";
 import {
   usePortfolioAccounts,
   useAccountSnapshots,
+  useAccountSnapshot,
   useUpsertSnapshot,
   useDeleteSnapshot,
 } from "@/hooks/useFamilyPortfolio";
@@ -68,9 +69,18 @@ export default function AccountInputPage() {
   const navigate = useNavigate();
 
   const { data: accounts = [] } = usePortfolioAccounts();
-  const { data: snapshots = [] } = useAccountSnapshots(accountId);
+  const {
+    data: snapshotPages,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useAccountSnapshots(accountId);
   const upsertMutation = useUpsertSnapshot();
   const deleteMutation = useDeleteSnapshot();
+
+  // 読み込み済みページをフラット化（一覧は holdings 抜きの軽量版）
+  const snapshots = snapshotPages?.pages.flatMap((p) => p.results) ?? [];
+  const totalCount = snapshotPages?.pages[0]?.count ?? 0;
 
   const account = accounts.find((a) => a.id === accountId);
 
@@ -78,6 +88,9 @@ export default function AccountInputPage() {
   const today = new Date();
   const defaultDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   const [selectedDate, setSelectedDate] = useState(defaultDate);
+
+  // 選択日の詳細（holdings 込み）を個別取得。一覧が12件ずつでも過去日を確実に読める
+  const { data: selectedSnapshot } = useAccountSnapshot(accountId, selectedDate);
 
   // フォーム状態
   const [totalValue, setTotalValue] = useState("");
@@ -88,9 +101,9 @@ export default function AccountInputPage() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // 選択日のスナップショットがあれば読み込む（日付の完全一致）
+  // 選択日のスナップショット（個別取得, holdings 込み）をフォームに反映
   useEffect(() => {
-    const snap = snapshots.find((s) => s.snapshot_date === selectedDate);
+    const snap = selectedSnapshot?.snapshot_date === selectedDate ? selectedSnapshot : undefined;
     if (snap) {
       setTotalValue(snap.total_value_jpy);
       setTotalCost(snap.total_cost_jpy ?? "");
@@ -117,7 +130,7 @@ export default function AccountInputPage() {
     }
     setSaveSuccess(false);
     setSaveError(null);
-  }, [selectedDate, snapshots]);
+  }, [selectedDate, selectedSnapshot]);
 
   const handleAddHolding = () => setHoldings((prev) => [...prev, emptyHolding()]);
   const handleRemoveHolding = (i: number) =>
@@ -176,14 +189,15 @@ export default function AccountInputPage() {
     );
   };
 
+  // 選択日に既存記録があるか（個別取得ベース。一覧が12件ずつでも過去日を正しく判定）
+  const existingSnap = selectedSnapshot?.snapshot_date === selectedDate ? selectedSnapshot : undefined;
+
   const handleDelete = () => {
-    const snap = snapshots.find((s) => s.snapshot_date === selectedDate);
-    if (!snap) return;
+    if (!existingSnap) return;
     if (!window.confirm("このスナップショットを削除しますか？")) return;
-    deleteMutation.mutate({ accountId, date: snap.snapshot_date });
+    deleteMutation.mutate({ accountId, date: existingSnap.snapshot_date });
   };
 
-  const existingSnap = snapshots.find((s) => s.snapshot_date === selectedDate);
   const isUsd = account?.currency === "USD";
 
   return (
@@ -437,14 +451,17 @@ export default function AccountInputPage() {
       {/* スナップショット履歴 */}
       {snapshots.length > 0 && (
         <Box sx={{ mt: 3 }}>
-          <Typography variant="subtitle2" gutterBottom>入力済み履歴</Typography>
-          <Stack spacing={1}>
-            {snapshots.slice(0, 12).map((s) => (
+          <Typography variant="subtitle2" gutterBottom>
+            入力済み履歴（{totalCount}件）
+          </Typography>
+          <Stack spacing={1} sx={{ maxHeight: 480, overflowY: "auto", pr: 0.5 }}>
+            {snapshots.map((s) => (
               <Card
                 key={s.id}
                 variant="outlined"
                 sx={{
                   cursor: "pointer",
+                  flexShrink: 0,
                   bgcolor: s.snapshot_date === selectedDate ? "action.selected" : "inherit",
                 }}
                 onClick={() => setSelectedDate(s.snapshot_date)}
@@ -473,6 +490,17 @@ export default function AccountInputPage() {
               </Card>
             ))}
           </Stack>
+          {hasNextPage && (
+            <Box sx={{ mt: 1, textAlign: "center" }}>
+              <Button
+                size="small"
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+              >
+                {isFetchingNextPage ? "読み込み中…" : `もっと見る（残り${totalCount - snapshots.length}件）`}
+              </Button>
+            </Box>
+          )}
         </Box>
       )}
     </Box>

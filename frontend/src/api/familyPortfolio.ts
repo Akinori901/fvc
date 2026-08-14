@@ -2,6 +2,7 @@ import apiClient from "./client";
 import type {
   AccountSnapshot,
   AccountSnapshotInput,
+  AccountSnapshotListResponse,
   CsvImportResult,
   CsvPreviewResult,
   FamilyDashboard,
@@ -32,8 +33,12 @@ export const portfolioAccountApi = {
 };
 
 export const accountSnapshotApi = {
-  list: (accountId: number) =>
-    apiClient.get<AccountSnapshot[]>(`/portfolio-accounts/${accountId}/snapshots/`),
+  list: (accountId: number, limit = 12, offset = 0) =>
+    apiClient.get<AccountSnapshotListResponse>(`/portfolio-accounts/${accountId}/snapshots/`, {
+      params: { limit, offset },
+    }),
+  get: (accountId: number, date: string) =>
+    apiClient.get<AccountSnapshot>(`/portfolio-accounts/${accountId}/snapshots/${date}/`),
   upsert: (accountId: number, data: AccountSnapshotInput) =>
     apiClient.post<AccountSnapshot>(`/portfolio-accounts/${accountId}/snapshots/`, data),
   update: (accountId: number, date: string, data: AccountSnapshotInput) =>

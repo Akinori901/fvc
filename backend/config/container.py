@@ -504,15 +504,28 @@ def save_ai_config_usecase() -> SaveAiConfigUseCase:
 def analyze_stock_usecase() -> AnalyzeStockUseCase:
     from apps.ai.application.services.prompt_builder_service import PromptBuilderService
     from apps.ai.application.usecases.analyze_stock_usecase import AnalyzeStockUseCase
-    from apps.valuations.infrastructure.repositories import DjangoValuationRepository
+    from apps.stocks.application.usecases.screening_usecase import ScreeningUseCase
 
+    # 画面の「スクリーニング指標」と同じ計算結果を AI プロンプトに渡すため、
+    # Web 画面・MCP サマリと同一構成の ScreeningUseCase を注入する。
+    screening = ScreeningUseCase(
+        stock_repo=stock_repository(),
+        financial_repo=financial_repository(),
+        margin_repo=margin_repository(),
+        price_repo=price_repository(),
+        dividend_repo=dividend_repository(),
+        owner_repo=owner_shareholder_repository(),
+    )
     return AnalyzeStockUseCase(
         ai_config_repo=ai_config_repository(),
         ai_log_repo=ai_analysis_log_repository(),
         stock_repo=stock_repository(),
         financial_repo=financial_repository(),
-        valuation_repo=DjangoValuationRepository(),
+        price_repo=price_repository(),
+        screening_usecase=screening,
         prompt_builder=PromptBuilderService(),
+        fx_repo=fx_rate_repository(),
+        interest_repo=interest_rate_repository(),
     )
 
 

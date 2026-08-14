@@ -172,6 +172,13 @@ export interface AccountSnapshot {
   holdings: AccountHolding[];
 }
 
+export interface AccountSnapshotListResponse {
+  count: number;
+  limit: number;
+  offset: number;
+  results: AccountSnapshot[];
+}
+
 export interface AccountSnapshotInput {
   snapshot_date: string;
   total_value_jpy: string | number;
