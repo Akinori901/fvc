@@ -45,6 +45,13 @@ class AccountSnapshotRepository(ABC):
     def find_by_account(self, account_id: int, user_id: int) -> list[AccountSnapshotEntity]: ...
 
     @abstractmethod
+    def find_by_account_paginated(
+        self, account_id: int, user_id: int, limit: int, offset: int
+    ) -> tuple[list[AccountSnapshotEntity], int]:
+        """新しい順に limit/offset で1ページ分と総件数を返す（holdings は含めない軽量版）。"""
+        ...
+
+    @abstractmethod
     def find_by_account_and_date(
         self, account_id: int, snapshot_date: str, user_id: int
     ) -> AccountSnapshotEntity | None: ...

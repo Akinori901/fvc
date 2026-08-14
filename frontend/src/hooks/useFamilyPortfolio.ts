@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import {
   familyMemberApi,
   portfolioAccountApi,
@@ -93,11 +93,30 @@ export function useDeletePortfolioAccount() {
 // スナップショット
 // -----------------------------------------------
 
+const SNAPSHOTS_PAGE_SIZE = 12;
+
+/** スナップショット履歴を12件ずつページング取得（「もっと見る」で追加ロード） */
 export function useAccountSnapshots(accountId: number) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ["account-snapshots", accountId],
-    queryFn: () => accountSnapshotApi.list(accountId).then((r) => r.data),
+    queryFn: ({ pageParam = 0 }) =>
+      accountSnapshotApi.list(accountId, SNAPSHOTS_PAGE_SIZE, pageParam).then((r) => r.data),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => {
+      const loaded = lastPage.offset + lastPage.results.length;
+      return loaded < lastPage.count ? loaded : undefined;
+    },
     enabled: accountId > 0,
+  });
+}
+
+/** 特定日のスナップショット単体を holdings 込みで取得（フォーム読み込み用） */
+export function useAccountSnapshot(accountId: number, date: string | null) {
+  return useQuery({
+    queryKey: ["account-snapshot", accountId, date],
+    queryFn: () => accountSnapshotApi.get(accountId, date as string).then((r) => r.data),
+    enabled: accountId > 0 && !!date,
+    retry: false,
   });
 }
 
@@ -106,8 +125,9 @@ export function useUpsertSnapshot() {
   return useMutation({
     mutationFn: ({ accountId, data }: { accountId: number; data: AccountSnapshotInput }) =>
       accountSnapshotApi.upsert(accountId, data),
-    onSuccess: (_, { accountId }) => {
+    onSuccess: (_, { accountId, data }) => {
       qc.invalidateQueries({ queryKey: ["account-snapshots", accountId] });
+      qc.invalidateQueries({ queryKey: ["account-snapshot", accountId, data.snapshot_date] });
       qc.invalidateQueries({ queryKey: ["family-portfolio-dashboard"] });
     },
   });
@@ -118,8 +138,9 @@ export function useDeleteSnapshot() {
   return useMutation({
     mutationFn: ({ accountId, date }: { accountId: number; date: string }) =>
       accountSnapshotApi.delete(accountId, date),
-    onSuccess: (_, { accountId }) => {
+    onSuccess: (_, { accountId, date }) => {
       qc.invalidateQueries({ queryKey: ["account-snapshots", accountId] });
+      qc.invalidateQueries({ queryKey: ["account-snapshot", accountId, date] });
       qc.invalidateQueries({ queryKey: ["family-portfolio-dashboard"] });
     },
   });

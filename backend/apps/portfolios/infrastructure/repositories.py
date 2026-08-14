@@ -132,11 +132,39 @@ class DjangoPortfolioAccountRepository(PortfolioAccountRepository):
 
 class DjangoAccountSnapshotRepository(AccountSnapshotRepository):
     def find_by_account(self, account_id: int, user_id: int) -> list[AccountSnapshotEntity]:
-        qs = AccountSnapshot.objects.filter(
+        qs = (
+            AccountSnapshot.objects.filter(
+                account_id=account_id,
+                account__family_member__user_id=user_id,
+            )
+            .prefetch_related("holdings")
+            .order_by("-snapshot_date")
+        )
+        return [self._to_entity(s) for s in qs]
+
+    def find_by_account_paginated(
+        self, account_id: int, user_id: int, limit: int, offset: int
+    ) -> tuple[list[AccountSnapshotEntity], int]:
+        base = AccountSnapshot.objects.filter(
             account_id=account_id,
             account__family_member__user_id=user_id,
-        ).prefetch_related("holdings")
-        return [self._to_entity(s) for s in qs]
+        )
+        total = base.count()
+        qs = base.order_by("-snapshot_date")[offset : offset + limit]
+        results = [
+            AccountSnapshotEntity(
+                id=obj.pk,
+                account_id=obj.account_id,
+                snapshot_date=str(obj.snapshot_date),
+                total_value_jpy=obj.total_value_jpy,
+                total_cost_jpy=obj.total_cost_jpy,
+                exchange_rate=obj.exchange_rate,
+                notes=obj.notes,
+                holdings=[],
+            )
+            for obj in qs
+        ]
+        return results, total
 
     def find_by_account_and_date(
         self, account_id: int, snapshot_date: str, user_id: int

@@ -287,13 +287,35 @@ class AccountSnapshotListView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    DEFAULT_LIMIT = 12
+    MAX_LIMIT = 100
+
     def get(self, request: Request, account_id: int) -> Response:
         account_repo = DjangoPortfolioAccountRepository()
         if not account_repo.find_by_id(account_id, cast("int", request.user.pk)):
             return Response({"detail": "見つかりません"}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            limit = int(request.query_params.get("limit", self.DEFAULT_LIMIT))
+            offset = int(request.query_params.get("offset", 0))
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "limit / offset は整数で指定してください"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        limit = max(1, min(limit, self.MAX_LIMIT))
+        offset = max(0, offset)
+
         repo = DjangoAccountSnapshotRepository()
-        snapshots = repo.find_by_account(account_id, cast("int", request.user.pk))
-        return Response([_snapshot_to_dict(s) for s in snapshots])
+        snapshots, total = repo.find_by_account_paginated(account_id, cast("int", request.user.pk), limit, offset)
+        return Response(
+            {
+                "count": total,
+                "limit": limit,
+                "offset": offset,
+                "results": [_snapshot_to_dict(s) for s in snapshots],
+            }
+        )
 
     def post(self, request: Request, account_id: int) -> Response:
         account_repo = DjangoPortfolioAccountRepository()
@@ -334,9 +356,16 @@ class AccountSnapshotListView(APIView):
 
 
 class AccountSnapshotDetailView(APIView):
-    """PUT/DELETE /api/portfolio-accounts/:id/snapshots/:date/"""
+    """GET/PUT/DELETE /api/portfolio-accounts/:id/snapshots/:date/"""
 
     permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, account_id: int, snapshot_date: str) -> Response:
+        repo = DjangoAccountSnapshotRepository()
+        snapshot = repo.find_by_account_and_date(account_id, snapshot_date, cast("int", request.user.pk))
+        if not snapshot:
+            return Response({"detail": "見つかりません"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(_snapshot_to_dict(snapshot))
 
     def put(self, request: Request, account_id: int, snapshot_date: str) -> Response:
         repo = DjangoAccountSnapshotRepository()

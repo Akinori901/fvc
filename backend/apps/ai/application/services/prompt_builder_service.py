@@ -25,24 +25,78 @@ _ROLE_PROMPTS: dict[str, str] = {
     "general": "",
     "quant": (
         "あなたは定量分析（統計・ファクター・ボラティリティ）に強い一流のクオンツアナリストです。"
-        "データの定量的な観点を重視し、ファクターエクスポージャー、リスクプレミアム、回帰分析の視点を活用してください。\n\n"
+        "提供データのうち、ヒストリカル・ボラティリティ、移動平均乖離、RSI/MACD、モメンタム、"
+        "バリュエーション（PBR/乖離率/市場織込成長率）、成長率、配当利回りを定量的に評価してください。\n"
+        "※ 個別銘柄のベータ・シャープレシオ・ファクターエクスポージャー・相関は本システムでは"
+        "算出しておらず提供されません。これらは推測せず、提供された指標の範囲で分析してください。\n\n"
     ),
     "fundamental": (
         "あなたは財務諸表分析・業績予想に基づくバリュー投資の一流ファンダメンタルアナリストです。"
-        "キャッシュフロー、収益性、競争優位、経営の質といった本質的価値の観点で分析してください。\n\n"
+        "提供データのうち、ROE・自己資本比率・営業利益率・売上高/EPS/営業利益の成長率・"
+        "営業キャッシュフロー/FCF・配当・オーナー経営・バリュエーションを重視して本質的価値を評価してください。\n"
+        "※ 純利益の絶対額・投資CF/財務CF・有利子負債の内訳は提供されません。推測しないでください。\n\n"
     ),
     "macro": (
-        "あなたはマクロ経済（金利・為替・景気循環・セクターローテーション）の専門アナリストです。"
-        "個別銘柄を経済環境やセクターサイクルの中に位置づけて評価してください。\n\n"
+        "あなたはマクロ経済（金利・為替・景気循環）の専門アナリストです。"
+        "提供される市場環境（USD/JPY・日米10年金利・金利差）と業種を踏まえ、"
+        "個別銘柄を金利感応度・為替感応度・業種特性の観点で位置づけてください。\n"
+        "※ 政策金利・CPI・GDP等の一般マクロ指標、セクター相対パフォーマンス、"
+        "個別銘柄の金利/為替感応度の実測値は提供されません。業種と提供環境データからの定性的推論に留めてください。\n\n"
     ),
     "technical": (
         "あなたはチャートパターン・移動平均・出来高分析に基づくテクニカルアナリストです。"
-        "価格モメンタム、サポート／レジスタンス、需給バランスの観点で分析してください。\n\n"
+        "提供される移動平均乖離（25/75/200日）・RSI・MACD・ボリンジャーバンド・ATR・"
+        "モメンタム・52週位置・信用需給・流動性を用いて、トレンド・過熱感・需給を分析してください。\n"
+        "※ 株価は日足終値のみ保持しており、始値・高値・安値（4本値）は提供されません。"
+        "そのためギャップや日中レンジ、真のATRは扱えません。終値ベースの近似として解釈してください。\n\n"
     ),
     "risk_mgmt": (
         "あなたは下方リスク評価・ドローダウン管理に特化したリスクマネジメント専門家です。"
-        "想定される下振れシナリオ、最大損失、リスク・リターン比の観点を最優先してください。\n\n"
+        "提供されるヒストリカル・ボラティリティ・ATR・信用残（信売比率/買残トレンド）・流動性・"
+        "自己資本比率・配当の安定性・バリュエーション過熱度から、下振れシナリオとリスク要因を評価してください。\n"
+        "※ VaR・最大ドローダウン・ベータ・シャープレシオは本システムでは算出しておらず提供されません。"
+        "提供されたボラティリティ等から定性的にリスクを論じ、これらの統計量は推測しないでください。\n\n"
     ),
+}
+
+# スクリーニング指標のコード値 → 日本語ラベル（画面表示と揃える）
+_ROE_TREND_LABELS: dict[str, str] = {
+    "improving": "改善",
+    "declining": "悪化",
+    "stable": "横ばい",
+}
+_MOMENTUM_LABELS: dict[str, str] = {
+    "strong_buy": "強い買い",
+    "buy": "買い",
+    "neutral": "中立",
+    "caution": "注意",
+    "sell": "売り",
+}
+_BALANCE_TREND_LABELS: dict[str, str] = {
+    "increasing": "増加",
+    "decreasing": "減少",
+    "flat": "横ばい",
+}
+_LIQUIDITY_LABELS: dict[str, str] = {
+    "high": "高",
+    "medium": "中",
+    "low": "低",
+    "very_low": "極低",
+}
+_RSI_SIGNAL_LABELS: dict[str, str] = {
+    "overbought": "買われ過ぎ",
+    "oversold": "売られ過ぎ",
+    "neutral": "中立",
+}
+_MACD_CROSS_LABELS: dict[str, str] = {
+    "golden": "ゴールデンクロス",
+    "dead": "デッドクロス",
+    "none": "なし",
+}
+_BB_SIGNAL_LABELS: dict[str, str] = {
+    "above_upper": "上限バンド超え",
+    "below_lower": "下限バンド割れ",
+    "inside": "バンド内",
 }
 
 _QUESTION_TEMPLATES: dict[str, str] = {
@@ -151,12 +205,19 @@ class PromptBuilderService:
             return f"¥{v:,.0f}" if v is not None else "不明"
 
         def _fmt_pct(v: object) -> str:
+            """比率（0.05 = 5%）を % 表記に。"""
             return f"{float(v) * 100:.1f}%" if v is not None else "不明"  # type: ignore[arg-type]
 
         def _fmt_mn(v: object) -> str:
             return f"{v:,}百万円" if v is not None else "不明"
 
+        def _fmt_ratio_pct(v: object) -> str:
+            """既に % スケール（12.29 = 12.29%）の値をそのまま % 表記に。"""
+            return f"{float(v):.2f}%" if v is not None else "不明"  # type: ignore[arg-type]
+
+        # --- 基本（常に出力） ---
         lines = [
+            "■ 基本情報・バリュエーション",
             f"証券コード: {ctx.code}",
             f"銘柄名: {ctx.name}",
             f"業種: {ctx.sector}",
@@ -167,7 +228,126 @@ class PromptBuilderService:
             f"売上高: {_fmt_mn(ctx.revenue)}",
             f"営業利益: {_fmt_mn(ctx.operating_income)}",
             f"PBR: {f'{ctx.pbr:.2f}倍' if ctx.pbr else '不明'}",
-            f"適正株価（Gordon Growth Model）: {_fmt_price(ctx.fair_value)}",
-            f"現在株価との乖離率: {_fmt_pct(ctx.discount_rate)}",
+            f"適正株価（Gordon Growth Model, 成長率2%想定）: {_fmt_price(ctx.fair_value)}",
+            f"適正株価との乖離率: {_fmt_pct(ctx.discount_rate)}",
         ]
+
+        # --- 成長性（欠損行はスキップ） ---
+        growth: list[str] = []
+        if ctx.implied_growth_rate is not None:
+            growth.append(f"市場が織り込む成長率（株価が示唆する期待成長率）: {_fmt_pct(ctx.implied_growth_rate)}")
+        if ctx.company_forecast_growth_rate is not None:
+            growth.append(f"会社予想ベース成長率: {_fmt_pct(ctx.company_forecast_growth_rate)}")
+        if ctx.growth_rate_label:
+            growth.append(f"成長率評価: {ctx.growth_rate_label}")
+        if ctx.eps_growth_yoy is not None:
+            growth.append(f"EPS成長率（前年比）: {_fmt_pct(ctx.eps_growth_yoy)}")
+        if ctx.eps_cagr_3y is not None:
+            growth.append(f"EPS CAGR（3年）: {_fmt_pct(ctx.eps_cagr_3y)}")
+        if ctx.revenue_growth_yoy is not None:
+            growth.append(f"売上高成長率（前年比）: {_fmt_pct(ctx.revenue_growth_yoy)}")
+        if ctx.roe_trend:
+            growth.append(f"ROEトレンド: {_ROE_TREND_LABELS.get(ctx.roe_trend, ctx.roe_trend)}")
+        if growth:
+            lines += ["", "■ 成長性", *growth]
+
+        # --- テクニカル・需給 ---
+        tech: list[str] = []
+        if ctx.momentum_signal:
+            tech.append(f"モメンタム（需給シグナル）: {_MOMENTUM_LABELS.get(ctx.momentum_signal, ctx.momentum_signal)}")
+        if ctx.price_position_52w is not None:
+            # 0.0〜1.0 の割合。0%=52週安値, 100%=52週高値
+            tech.append(f"52週レンジ内の位置: {_fmt_pct(ctx.price_position_52w)}（0%=安値, 100%=高値）")
+        if ctx.distance_from_52w_high is not None:
+            tech.append(f"52週高値からの距離: {_fmt_pct(ctx.distance_from_52w_high)}")
+        if ctx.sl_ratio is not None:
+            tech.append(f"信用倍率（信売比率）: {float(ctx.sl_ratio):.2f}倍")
+        if ctx.long_balance_trend:
+            trend_label = _BALANCE_TREND_LABELS.get(ctx.long_balance_trend, ctx.long_balance_trend)
+            tech.append(f"信用買残トレンド: {trend_label}")
+        if ctx.liquidity_level:
+            tech.append(f"流動性: {_LIQUIDITY_LABELS.get(ctx.liquidity_level, ctx.liquidity_level)}")
+        # 移動平均乖離（build_indicators。既に % スケール）
+        if ctx.ma_25_deviation_pct is not None:
+            tech.append(f"25日移動平均乖離: {_fmt_ratio_pct(ctx.ma_25_deviation_pct)}")
+        if ctx.ma_75_deviation_pct is not None:
+            tech.append(f"75日移動平均乖離: {_fmt_ratio_pct(ctx.ma_75_deviation_pct)}")
+        if ctx.ma_200_deviation_pct is not None:
+            tech.append(f"200日移動平均乖離: {_fmt_ratio_pct(ctx.ma_200_deviation_pct)}")
+        if ctx.rsi_14 is not None:
+            rsi_sig = f"（{_RSI_SIGNAL_LABELS.get(ctx.rsi_signal, '')}）" if ctx.rsi_signal else ""
+            tech.append(f"RSI(14): {float(ctx.rsi_14):.1f}{rsi_sig}")
+        if ctx.macd_hist is not None:
+            macd_c = f"（{_MACD_CROSS_LABELS.get(ctx.macd_cross, '')}）" if ctx.macd_cross else ""
+            tech.append(f"MACDヒストグラム: {float(ctx.macd_hist):.2f}{macd_c}")
+        if ctx.bb_signal:
+            bb_pos = f"（%B={float(ctx.bb_position):.2f}）" if ctx.bb_position is not None else ""
+            tech.append(f"ボリンジャーバンド: {_BB_SIGNAL_LABELS.get(ctx.bb_signal, ctx.bb_signal)}{bb_pos}")
+        if ctx.atr_pct is not None:
+            tech.append(f"ATR(14)株価比: {_fmt_ratio_pct(ctx.atr_pct)}（4本値未保持のため終値ベース近似）")
+        if ctx.volatility_20d is not None:
+            tech.append(f"ヒストリカル・ボラティリティ(20日): {_fmt_ratio_pct(ctx.volatility_20d)}")
+        if tech:
+            lines += ["", "■ テクニカル・需給", *tech]
+
+        # --- 配当 ---
+        div: list[str] = []
+        if ctx.dividend_yield is not None:
+            div.append(f"配当利回り: {_fmt_ratio_pct(ctx.dividend_yield)}")
+        if ctx.payout_ratio is not None:
+            div.append(f"配当性向: {_fmt_ratio_pct(ctx.payout_ratio)}")
+        if ctx.consecutive_dividend_years is not None:
+            div.append(f"連続配当年数: {ctx.consecutive_dividend_years}年")
+        if ctx.progressive_dividend_years is not None:
+            div.append(f"累進配当年数: {ctx.progressive_dividend_years}年")
+        if div:
+            lines += ["", "■ 配当", *div]
+
+        # --- FCF ---
+        fcf: list[str] = []
+        if ctx.fcf_yield is not None:
+            fcf.append(f"FCF利回り: {_fmt_ratio_pct(ctx.fcf_yield)}")
+        if ctx.fcf_margin is not None:
+            fcf.append(f"FCFマージン: {_fmt_ratio_pct(ctx.fcf_margin)}")
+        if fcf:
+            lines += ["", "■ キャッシュフロー", *fcf]
+
+        # --- 財務健全性 ---
+        health: list[str] = []
+        if ctx.per is not None:
+            health.append(f"PER: {float(ctx.per):.2f}倍")
+        if ctx.market_cap is not None:
+            health.append(f"時価総額: {_fmt_mn(ctx.market_cap)}")
+        if ctx.equity_ratio is not None:
+            health.append(f"自己資本比率: {_fmt_ratio_pct(ctx.equity_ratio)}")
+        if ctx.operating_margin is not None:
+            health.append(f"営業利益率: {_fmt_ratio_pct(ctx.operating_margin)}")
+        if ctx.operating_cash_flow is not None:
+            health.append(f"営業キャッシュフロー: {_fmt_mn(ctx.operating_cash_flow)}")
+        if ctx.free_cash_flow is not None:
+            health.append(f"フリーキャッシュフロー: {_fmt_mn(ctx.free_cash_flow)}")
+        if health:
+            lines += ["", "■ 財務健全性", *health]
+
+        # --- オーナー経営 ---
+        if ctx.is_owner_managed:
+            owner = "オーナー経営: 該当（代表者が主要株主）"
+            if ctx.owner_ratio is not None:
+                owner += f" / 代表者関連の持株比率: {_fmt_ratio_pct(ctx.owner_ratio)}"
+            lines += ["", "■ ガバナンス", owner]
+
+        # --- 市場環境（マクロ） ---
+        macro: list[str] = []
+        if ctx.usdjpy is not None:
+            macro.append(f"USD/JPY: {float(ctx.usdjpy):.2f}")
+        if ctx.us_10y is not None:
+            macro.append(f"米国10年債利回り: {float(ctx.us_10y):.2f}%")
+        if ctx.jp_10y is not None:
+            macro.append(f"日本10年債利回り: {float(ctx.jp_10y):.2f}%")
+        if ctx.us_10y is not None and ctx.jp_10y is not None:
+            macro.append(f"日米10年金利差: {float(ctx.us_10y - ctx.jp_10y):.2f}%")
+        if macro:
+            market_label = "米国市場" if ctx.market_type == "US" else "日本市場"
+            lines += ["", f"■ 市場環境（{market_label}上場, 分析時点）", *macro]
+
         return "\n".join(lines)
