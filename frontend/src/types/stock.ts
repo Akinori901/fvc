@@ -3,6 +3,7 @@ export interface Stock {
   code: string;
   name: string;
   market: string;
+  market_type?: string; // "JP" | "US"。米国株はドル建て表示に使う
   sector: string;
   latest_price: string | null;
   latest_price_date: string | null;

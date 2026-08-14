@@ -375,7 +375,7 @@ export default function StockDetailPage() {
           <CardContent>
             <Typography variant="body2" color="text.secondary">最新株価</Typography>
             <Typography variant="h6">
-              {latestPrice ? formatCurrency(latestPrice.close_price) : "-"}
+              {latestPrice ? formatCurrency(latestPrice.close_price, stock?.market_type) : "-"}
             </Typography>
             {latestPrice?.date && (
               <Typography variant="caption" color="text.secondary">{latestPrice.date}</Typography>
@@ -405,7 +405,7 @@ export default function StockDetailPage() {
               />
             </Stack>
             <Typography variant="h6">
-              {fairValue != null ? formatCurrency(fairValue) : "-"}
+              {fairValue != null ? formatCurrency(fairValue, stock?.market_type) : "-"}
             </Typography>
             <Typography variant="caption" color="text.secondary">成長率2%想定</Typography>
           </CardContent>
@@ -441,7 +441,7 @@ export default function StockDetailPage() {
               )}
             </Stack>
             <Typography variant="h6">
-              {effectiveBps ? formatCurrency(Number(effectiveBps.bps)) : "-"}
+              {effectiveBps ? formatCurrency(Number(effectiveBps.bps), stock?.market_type) : "-"}
             </Typography>
             {effectiveBps && (
               <Typography variant="caption" color="text.secondary">{effectiveBps.fiscal_year}年度</Typography>
@@ -508,7 +508,7 @@ export default function StockDetailPage() {
                   <FinancialTermHelp termKey="industry_min_fair_value" />
                 </Stack>
                 <Typography variant="h6">
-                  {formatCurrency(Number(stock.industry_metrics.min_roe_fair_value))}
+                  {formatCurrency(Number(stock.industry_metrics.min_roe_fair_value), stock?.market_type)}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">成長率2%想定</Typography>
               </CardContent>
@@ -707,7 +707,7 @@ export default function StockDetailPage() {
                 <FinancialTermHelp termKey="eps" />
               </Stack>
               <Typography variant="body1" fontWeight="bold">
-                {effectiveBps?.eps != null ? formatCurrency(Number(effectiveBps.eps)) : "-"}
+                {effectiveBps?.eps != null ? formatCurrency(Number(effectiveBps.eps), stock?.market_type) : "-"}
               </Typography>
             </Box>
             <Box>
@@ -893,7 +893,7 @@ export default function StockDetailPage() {
 
       {tab === 0 && (
         <>
-          <FinancialTable financials={financials ?? []} />
+          <FinancialTable financials={financials ?? []} marketType={stock?.market_type} />
           {manualFinancials && manualFinancials.length > 0 && (
             <Card variant="outlined" sx={{ mt: 2 }}>
               <CardContent>
@@ -916,9 +916,9 @@ export default function StockDetailPage() {
                     >
                       <Stack direction="row" spacing={2} flexWrap="wrap">
                         <Typography variant="body2" fontWeight="bold">{m.fiscal_year}年度</Typography>
-                        {m.bps && <Typography variant="body2">BPS: {formatCurrency(Number(m.bps))}</Typography>}
-                        {m.eps && <Typography variant="body2">EPS: {formatCurrency(Number(m.eps))}</Typography>}
-                        {m.eps_forecast && <Typography variant="body2">予想EPS: {formatCurrency(Number(m.eps_forecast))}</Typography>}
+                        {m.bps && <Typography variant="body2">BPS: {formatCurrency(Number(m.bps), stock?.market_type)}</Typography>}
+                        {m.eps && <Typography variant="body2">EPS: {formatCurrency(Number(m.eps), stock?.market_type)}</Typography>}
+                        {m.eps_forecast && <Typography variant="body2">予想EPS: {formatCurrency(Number(m.eps_forecast), stock?.market_type)}</Typography>}
                         <Typography variant="caption" color="text.secondary">{m.source_label} • {m.updated_at.slice(0, 10)}</Typography>
                         {m.is_overridden_by_auto && <Chip label="J-Quants自動データあり" size="small" color="default" />}
                       </Stack>
@@ -942,7 +942,7 @@ export default function StockDetailPage() {
         </>
       )}
 
-      {tab === 1 && <TechnicalChartGroup code={code ?? ""} />}
+      {tab === 1 && <TechnicalChartGroup code={code ?? ""} marketType={stock?.market_type} />}
 
       {tab === 2 && <MarginTrendPanel stockCode={code ?? ""} />}
 
@@ -1020,7 +1020,7 @@ export default function StockDetailPage() {
 
           {/* 最新の計算結果 */}
           {calculateMutation.data && (
-            <ResultSummary result={calculateMutation.data} />
+            <ResultSummary result={calculateMutation.data} marketType={stock?.market_type} />
           )}
 
           {/* 計算履歴 */}
@@ -1054,7 +1054,7 @@ export default function StockDetailPage() {
                           適正PBR: {formatMultiple(v.fair_pbr)}
                         </Typography>
                         <Typography variant="body2">
-                          適正株価: {formatCurrency(v.fair_value)}
+                          適正株価: {formatCurrency(v.fair_value, stock?.market_type)}
                         </Typography>
                       </Stack>
                       <Chip

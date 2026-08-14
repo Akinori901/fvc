@@ -12,9 +12,10 @@ import { formatCurrency, formatPercent, formatDecimal } from "@/utils/format";
 
 interface Props {
   financials: StockFinancial[];
+  marketType?: string; // "US" ならドル建て表示
 }
 
-export default function FinancialTable({ financials }: Props) {
+export default function FinancialTable({ financials, marketType }: Props) {
   const sorted = [...financials].sort((a, b) => b.fiscal_year - a.fiscal_year);
 
   return (
@@ -43,7 +44,7 @@ export default function FinancialTable({ financials }: Props) {
               </TableCell>
               <TableCell align="right">
                 {f.net_assets != null
-                  ? formatCurrency(f.net_assets * 1_000_000)
+                  ? formatCurrency(f.net_assets * 1_000_000, marketType)
                   : "-"}
               </TableCell>
               <TableCell align="right">

@@ -6,9 +6,10 @@ import { getEvaluationZone } from "@/utils/evaluation";
 
 interface Props {
   result: ValuationResult;
+  marketType?: string; // "US" ならドル建て表示
 }
 
-export default function ResultSummary({ result }: Props) {
+export default function ResultSummary({ result, marketType }: Props) {
   const discountRate = parseFloat(result.discount_rate);
   const zone = getEvaluationZone(discountRate);
 
@@ -32,7 +33,7 @@ export default function ResultSummary({ result }: Props) {
               適正株価
             </Typography>
             <Typography variant="h5" fontWeight="bold">
-              {formatCurrency(result.fair_value)}
+              {formatCurrency(result.fair_value, marketType)}
             </Typography>
           </Box>
           <Box>
@@ -40,7 +41,7 @@ export default function ResultSummary({ result }: Props) {
               現在株価
             </Typography>
             <Typography variant="h5">
-              {formatCurrency(result.current_price)}
+              {formatCurrency(result.current_price, marketType)}
             </Typography>
           </Box>
           <Box>

@@ -5,9 +5,10 @@ import { formatCurrency } from "@/utils/format";
 interface Props {
   fairValue: number;
   currentPrice: number;
+  marketType?: string; // "US" ならドル建て表示
 }
 
-export default function PriceRangeBar({ fairValue, currentPrice }: Props) {
+export default function PriceRangeBar({ fairValue, currentPrice, marketType }: Props) {
   const zones = getAllZones();
   const ratio = currentPrice / fairValue;
   // ratio < 0.7 → 超割安, 0.7-0.9 → 割安, 0.9-1.1 → 適正, 1.1-1.3 → 割高, >1.3 → 危険
@@ -43,13 +44,13 @@ export default function PriceRangeBar({ fairValue, currentPrice }: Props) {
       </Box>
       <Stack direction="row" justifyContent="space-between" sx={{ mt: 0.5 }}>
         <Typography variant="caption" color="text.secondary">
-          {formatCurrency(fairValue * 0.5)}
+          {formatCurrency(fairValue * 0.5, marketType)}
         </Typography>
         <Typography variant="caption" color="text.secondary">
-          適正: {formatCurrency(fairValue)}
+          適正: {formatCurrency(fairValue, marketType)}
         </Typography>
         <Typography variant="caption" color="text.secondary">
-          {formatCurrency(fairValue * 1.5)}
+          {formatCurrency(fairValue * 1.5, marketType)}
         </Typography>
       </Stack>
     </Box>
