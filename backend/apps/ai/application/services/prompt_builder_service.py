@@ -191,25 +191,37 @@ class PromptBuilderService:
 
         context_text = self._format_context(context)
 
+        sym = "$" if context.market_type == "US" else "¥"
         return template.format(
             context=context_text,
             pbr=f"{context.pbr:.2f}" if context.pbr else "不明",
             roe=f"{float(context.roe) * 100:.1f}%" if context.roe else "不明",
-            eps=f"¥{context.eps:,.0f}" if context.eps else "不明",
+            eps=f"{sym}{context.eps:,.2f}" if context.eps else "不明",
             sector=context.sector,
             custom_question=custom_question,
         )
 
     def _format_context(self, ctx: StockContextDTO) -> str:
+        is_us = ctx.market_type == "US"
+        sym = "$" if is_us else "¥"
+        unit = "百万ドル" if is_us else "百万円"
+
         def _fmt_price(v: object) -> str:
-            return f"¥{v:,.0f}" if v is not None else "不明"
+            """株価・BPS など。日本株は整数、米株はドル建て小数2桁。"""
+            if v is None:
+                return "不明"
+            return f"{sym}{v:,.2f}" if is_us else f"{sym}{v:,.0f}"
+
+        def _fmt_eps(v: object) -> str:
+            """EPS は小数2桁（$0.31 や ¥85.25 のような小額を切り捨てない）。"""
+            return f"{sym}{v:,.2f}" if v is not None else "不明"
 
         def _fmt_pct(v: object) -> str:
             """比率（0.05 = 5%）を % 表記に。"""
             return f"{float(v) * 100:.1f}%" if v is not None else "不明"  # type: ignore[arg-type]
 
         def _fmt_mn(v: object) -> str:
-            return f"{v:,}百万円" if v is not None else "不明"
+            return f"{v:,}{unit}" if v is not None else "不明"
 
         def _fmt_ratio_pct(v: object) -> str:
             """既に % スケール（12.29 = 12.29%）の値をそのまま % 表記に。"""
@@ -223,7 +235,7 @@ class PromptBuilderService:
             f"業種: {ctx.sector}",
             f"最新株価: {_fmt_price(ctx.latest_price)}",
             f"BPS（1株純資産）: {_fmt_price(ctx.bps)}",
-            f"EPS（1株利益）: {_fmt_price(ctx.eps)}",
+            f"EPS（1株利益）: {_fmt_eps(ctx.eps)}",
             f"ROE: {_fmt_pct(ctx.roe)}",
             f"売上高: {_fmt_mn(ctx.revenue)}",
             f"営業利益: {_fmt_mn(ctx.operating_income)}",

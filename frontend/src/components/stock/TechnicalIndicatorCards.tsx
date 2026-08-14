@@ -63,13 +63,16 @@ interface Props {
   latest: IndicatorLatest;
   currentClose: string | null;
   atrApproximation: string;
+  marketType?: string; // "US" ならドル建て表示
 }
 
 export default function TechnicalIndicatorCards({
   latest,
   currentClose,
   atrApproximation,
+  marketType,
 }: Props) {
+  const sym = marketType === "US" ? "$" : "¥";
   return (
     <Box sx={{ mt: 2 }}>
       <Typography variant="h6" sx={{ mb: 1 }}>
@@ -88,13 +91,13 @@ export default function TechnicalIndicatorCards({
               </Box>
               <Box sx={{ display: "flex", flexDirection: "column", gap: 0.3, mt: 0.5 }}>
                 <Typography variant="body2">
-                  25日: ¥{fmtNum(latest.ma_25)} ({fmtPct(latest.ma_25_deviation_pct)})
+                  25日: {sym}{fmtNum(latest.ma_25)} ({fmtPct(latest.ma_25_deviation_pct)})
                 </Typography>
                 <Typography variant="body2">
-                  75日: ¥{fmtNum(latest.ma_75)} ({fmtPct(latest.ma_75_deviation_pct)})
+                  75日: {sym}{fmtNum(latest.ma_75)} ({fmtPct(latest.ma_75_deviation_pct)})
                 </Typography>
                 <Typography variant="body2">
-                  200日: ¥{fmtNum(latest.ma_200)} ({fmtPct(latest.ma_200_deviation_pct)})
+                  200日: {sym}{fmtNum(latest.ma_200)} ({fmtPct(latest.ma_200_deviation_pct)})
                 </Typography>
               </Box>
             </CardContent>
@@ -122,7 +125,7 @@ export default function TechnicalIndicatorCards({
               </Box>
               <Box sx={{ display: "flex", flexDirection: "column", gap: 0.3, mt: 0.5 }}>
                 <Typography variant="body2">
-                  上: ¥{fmtNum(latest.bb_upper)} / 中: ¥{fmtNum(latest.bb_middle)} / 下: ¥{fmtNum(latest.bb_lower)}
+                  上: {sym}{fmtNum(latest.bb_upper)} / 中: {sym}{fmtNum(latest.bb_middle)} / 下: {sym}{fmtNum(latest.bb_lower)}
                 </Typography>
                 {latest.bb_position !== null && (
                   <Typography variant="caption" color="text.secondary">
@@ -226,7 +229,7 @@ export default function TechnicalIndicatorCards({
                 <IndicatorHelpTooltip title={HELP_TEXTS.atr} />
               </Box>
               <Typography variant="h6" fontWeight="bold" sx={{ mt: 0.5 }}>
-                ¥{fmtNum(latest.atr_14)}
+                {sym}{fmtNum(latest.atr_14)}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {fmtPct(latest.atr_pct)}
@@ -273,7 +276,7 @@ export default function TechnicalIndicatorCards({
                   最新終値
                 </Typography>
                 <Typography variant="h5" fontWeight="bold">
-                  ¥{fmtNum(currentClose)}
+                  {sym}{fmtNum(currentClose)}
                 </Typography>
               </CardContent>
             </Card>

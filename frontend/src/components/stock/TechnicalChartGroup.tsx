@@ -11,6 +11,7 @@ import type { TechnicalPeriod } from "@/types/technical";
 
 interface Props {
   code: string;
+  marketType?: string; // "US" ならドル建て表示
 }
 
 const PERIOD_OPTIONS: { value: TechnicalPeriod; label: string }[] = [
@@ -21,7 +22,7 @@ const PERIOD_OPTIONS: { value: TechnicalPeriod; label: string }[] = [
   { value: "all", label: "全期間" },
 ];
 
-export default function TechnicalChartGroup({ code }: Props) {
+export default function TechnicalChartGroup({ code, marketType }: Props) {
   const [period, setPeriod] = useState<TechnicalPeriod>("1y");
   const { data, isLoading, isError } = useStockTechnicals(code, period);
 
@@ -85,6 +86,7 @@ export default function TechnicalChartGroup({ code }: Props) {
           latest={data.latest}
           currentClose={latestClose}
           atrApproximation={data.atr_approximation}
+          marketType={marketType}
         />
       )}
 
