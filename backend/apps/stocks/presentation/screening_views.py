@@ -56,6 +56,13 @@ class ScreeningView(APIView):
         min_momentum_signal = request.query_params.get("min_momentum_signal") or None
         owner_managed_only = request.query_params.get("owner_managed_only", "false").lower() == "true"
         min_fcf_yield = _parse_decimal_or_none(request.query_params.get("min_fcf_yield"))
+        # 買い時テクニカルシグナル（ON/OFF トグル）
+        ma_golden_cross_only = request.query_params.get("ma_golden_cross_only", "false").lower() == "true"
+        price_cross_ma25_only = request.query_params.get("price_cross_ma25_only", "false").lower() == "true"
+        price_cross_ma75_only = request.query_params.get("price_cross_ma75_only", "false").lower() == "true"
+        macd_golden_cross_only = request.query_params.get("macd_golden_cross_only", "false").lower() == "true"
+        rsi_rebound_only = request.query_params.get("rsi_rebound_only", "false").lower() == "true"
+        pullback_buy_only = request.query_params.get("pullback_buy_only", "false").lower() == "true"
         # 信用買残トレンド（1〜12ヶ月）
         margin_trend_months = _parse_int_or_none(request.query_params.get("margin_trend_months"))
         if margin_trend_months is not None and not 1 <= margin_trend_months <= 12:  # noqa: PLR2004
@@ -100,6 +107,12 @@ class ScreeningView(APIView):
             margin_trend_months=margin_trend_months,
             long_balance_trend=long_balance_trend,
             margin_trend_threshold_pct=margin_trend_threshold_pct,
+            ma_golden_cross_only=ma_golden_cross_only,
+            price_cross_ma25_only=price_cross_ma25_only,
+            price_cross_ma75_only=price_cross_ma75_only,
+            macd_golden_cross_only=macd_golden_cross_only,
+            rsi_rebound_only=rsi_rebound_only,
+            pullback_buy_only=pullback_buy_only,
         )
 
         def _s(v: object) -> str | None:
@@ -157,6 +170,12 @@ class ScreeningView(APIView):
                 "is_owner_managed": r.is_owner_managed,
                 "owner_ratio": _s(r.owner_ratio),
                 "owner_match_type": r.owner_match_type,
+                "ma_golden_cross": r.ma_golden_cross,
+                "price_cross_ma25": r.price_cross_ma25,
+                "price_cross_ma75": r.price_cross_ma75,
+                "macd_golden_cross": r.macd_golden_cross,
+                "rsi_rebound": r.rsi_rebound,
+                "pullback_buy": r.pullback_buy,
             }
             for r in results
         ]

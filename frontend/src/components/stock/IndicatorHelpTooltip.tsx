@@ -148,4 +148,55 @@ export const HELP_TEXTS = {
       <Typography variant="caption" display="block">・下落警戒 / 購入危険 → 買い増しは慎重に</Typography>
     </Box>
   ),
+  maGoldenCross: (
+    <Box>
+      <Typography variant="caption" display="block" fontWeight="bold" mb={0.5}>MAゴールデンクロス</Typography>
+      <Typography variant="caption" display="block">25日移動平均が75日移動平均を下から上に抜けた状態。中期的な上昇転換のサインです。</Typography>
+      <Typography variant="caption" display="block" mt={0.5}>・20営業日以上、下にあった後の上抜けに限定</Typography>
+      <Typography variant="caption" display="block">・直近5営業日以内に発生したものを抽出</Typography>
+      <Typography variant="caption" display="block" mt={0.5}>※ データが100営業日未満の銘柄は対象外</Typography>
+    </Box>
+  ),
+  priceCrossMa25: (
+    <Box>
+      <Typography variant="caption" display="block" fontWeight="bold" mb={0.5}>株価が25日線を上抜け</Typography>
+      <Typography variant="caption" display="block">終値が25日移動平均を下から上に突破。短期の底打ち反転サインです。</Typography>
+      <Typography variant="caption" display="block" mt={0.5}>・20営業日以上、下値圏にあった後の突破に限定</Typography>
+      <Typography variant="caption" display="block">・直近5営業日以内に発生したものを抽出</Typography>
+      <Typography variant="caption" display="block" mt={0.5}>※ データが100営業日未満の銘柄は対象外</Typography>
+    </Box>
+  ),
+  priceCrossMa75: (
+    <Box>
+      <Typography variant="caption" display="block" fontWeight="bold" mb={0.5}>株価が75日線を上抜け</Typography>
+      <Typography variant="caption" display="block">終値が75日移動平均を上抜け。中期トレンド転換のサイン（25日線版より強め）です。</Typography>
+      <Typography variant="caption" display="block" mt={0.5}>・20営業日以上、下値圏にあった後の突破に限定</Typography>
+      <Typography variant="caption" display="block">・直近5営業日以内に発生したものを抽出</Typography>
+      <Typography variant="caption" display="block" mt={0.5}>※ データが100営業日未満の銘柄は対象外</Typography>
+    </Box>
+  ),
+  macdGoldenCross: (
+    <Box>
+      <Typography variant="caption" display="block" fontWeight="bold" mb={0.5}>MACDゴールデンクロス</Typography>
+      <Typography variant="caption" display="block">MACDがシグナル線を上抜け（ヒストグラムがマイナスからプラスへ）。上昇モメンタム発生のサインです。</Typography>
+      <Typography variant="caption" display="block" mt={0.5}>・直近5営業日以内に発生したものを抽出</Typography>
+      <Typography variant="caption" display="block" mt={0.5}>※ データが100営業日未満の銘柄は対象外</Typography>
+    </Box>
+  ),
+  rsiRebound: (
+    <Box>
+      <Typography variant="caption" display="block" fontWeight="bold" mb={0.5}>RSI売られ過ぎから反発</Typography>
+      <Typography variant="caption" display="block">RSI(14)が30以下の売られ過ぎ圏から30を上抜け。過度な下落の反発初動を捉えるサインです。</Typography>
+      <Typography variant="caption" display="block" mt={0.5}>・直近5営業日以内に発生したものを抽出</Typography>
+      <Typography variant="caption" display="block" mt={0.5}>※ データが100営業日未満の銘柄は対象外</Typography>
+    </Box>
+  ),
+  pullbackBuy: (
+    <Box>
+      <Typography variant="caption" display="block" fontWeight="bold" mb={0.5}>押し目買い</Typography>
+      <Typography variant="caption" display="block">株価が75日線より上の上昇トレンド中に、一時的に25日線付近まで下げて再度上抜け（25日線＞75日線が継続）。トレンド継続中の買い場サインです。</Typography>
+      <Typography variant="caption" display="block" mt={0.5}>・直近5営業日以内に発生したものを抽出</Typography>
+      <Typography variant="caption" display="block" mt={0.5}>※ データが100営業日未満の銘柄は対象外</Typography>
+    </Box>
+  ),
 };
