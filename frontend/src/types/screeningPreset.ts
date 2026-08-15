@@ -20,6 +20,13 @@ export interface ScreeningFilters {
   long_balance_trend: "increasing" | "decreasing" | null;
   margin_trend_months: number;
   margin_trend_threshold_pct: number | null;
+  // 買い時テクニカルシグナル（ON/OFF）
+  ma_golden_cross_only: boolean;
+  price_cross_ma25_only: boolean;
+  price_cross_ma75_only: boolean;
+  macd_golden_cross_only: boolean;
+  rsi_rebound_only: boolean;
+  pullback_buy_only: boolean;
 }
 
 export const DEFAULT_FILTERS: ScreeningFilters = {
@@ -44,6 +51,12 @@ export const DEFAULT_FILTERS: ScreeningFilters = {
   long_balance_trend: null,
   margin_trend_months: 2,
   margin_trend_threshold_pct: null,
+  ma_golden_cross_only: false,
+  price_cross_ma25_only: false,
+  price_cross_ma75_only: false,
+  macd_golden_cross_only: false,
+  rsi_rebound_only: false,
+  pullback_buy_only: false,
 };
 
 export interface ScreeningPreset {

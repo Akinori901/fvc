@@ -16,9 +16,11 @@ import {
   FormControl,
   InputLabel,
   Autocomplete,
+  Box,
 } from "@mui/material";
 import type { ScreeningFilters } from "@/types/screeningPreset";
 import { DEFAULT_FILTERS } from "@/types/screeningPreset";
+import IndicatorHelpTooltip, { HELP_TEXTS } from "@/components/stock/IndicatorHelpTooltip";
 
 interface Props {
   open: boolean;
@@ -166,6 +168,33 @@ export default function ScreeningFilterModal({ open, onClose, filters, onApply, 
               <MenuItem value="high">高のみ</MenuItem>
             </Select>
           </FormControl>
+
+          <Divider />
+          <Typography variant="subtitle2" color="primary">買い時シグナル</Typography>
+          <Typography variant="caption" color="text.secondary">
+            テクニカル指標が買い時を示す銘柄に絞り込みます（複数選択で AND 条件）。
+          </Typography>
+          {(
+            [
+              ["ma_golden_cross_only", "MAゴールデンクロス（25日線が75日線を上抜け）", "maGoldenCross"],
+              ["price_cross_ma25_only", "株価が25日線を上抜け", "priceCrossMa25"],
+              ["price_cross_ma75_only", "株価が75日線を上抜け", "priceCrossMa75"],
+              ["macd_golden_cross_only", "MACDゴールデンクロス", "macdGoldenCross"],
+              ["rsi_rebound_only", "RSI売られ過ぎから反発", "rsiRebound"],
+              ["pullback_buy_only", "押し目買い（上昇トレンド中の25日線反発）", "pullbackBuy"],
+            ] as const
+          ).map(([key, label, helpKey]) => (
+            <FormControlLabel
+              key={key}
+              control={<Switch checked={local[key]} onChange={(e) => set(key, e.target.checked)} />}
+              label={
+                <Box sx={{ display: "flex", alignItems: "center" }}>
+                  {label}
+                  <IndicatorHelpTooltip title={HELP_TEXTS[helpKey]} />
+                </Box>
+              }
+            />
+          ))}
 
           <Divider />
           <Typography variant="subtitle2" color="primary">配当</Typography>

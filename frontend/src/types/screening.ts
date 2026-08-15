@@ -57,4 +57,11 @@ export interface ScreeningResult {
   is_owner_managed: boolean;
   owner_ratio: string | null;
   owner_match_type: "exact" | "family" | "company" | null;
+  // 買い時テクニカルシグナル
+  ma_golden_cross: boolean;
+  price_cross_ma25: boolean;
+  price_cross_ma75: boolean;
+  macd_golden_cross: boolean;
+  rsi_rebound: boolean;
+  pullback_buy: boolean;
 }

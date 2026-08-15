@@ -99,6 +99,13 @@ export default function StockListPage() {
       margin_trend_threshold_pct: filters.long_balance_trend
         ? (filters.margin_trend_threshold_pct ?? undefined)
         : undefined,
+      // 買い時シグナル（ON の時だけ送信。日足の多め取得を必要時のみに限定）
+      ma_golden_cross_only: filters.ma_golden_cross_only || undefined,
+      price_cross_ma25_only: filters.price_cross_ma25_only || undefined,
+      price_cross_ma75_only: filters.price_cross_ma75_only || undefined,
+      macd_golden_cross_only: filters.macd_golden_cross_only || undefined,
+      rsi_rebound_only: filters.rsi_rebound_only || undefined,
+      pullback_buy_only: filters.pullback_buy_only || undefined,
     };
   }, [mode, growthRate, filters]);
 
@@ -141,6 +148,12 @@ export default function StockListPage() {
     if (filters.min_overall_score !== d.min_overall_score) count++;
     // 期間・閾値はトレンド指定とセットで意味を持つため、トレンドのみを1件として数える
     if (filters.long_balance_trend !== d.long_balance_trend) count++;
+    if (filters.ma_golden_cross_only !== d.ma_golden_cross_only) count++;
+    if (filters.price_cross_ma25_only !== d.price_cross_ma25_only) count++;
+    if (filters.price_cross_ma75_only !== d.price_cross_ma75_only) count++;
+    if (filters.macd_golden_cross_only !== d.macd_golden_cross_only) count++;
+    if (filters.rsi_rebound_only !== d.rsi_rebound_only) count++;
+    if (filters.pullback_buy_only !== d.pullback_buy_only) count++;
     return count;
   }, [filters]);
 
@@ -852,7 +865,8 @@ export default function StockListPage() {
               onSelect={(id, f) => {
                 setSelectedPresetId(id);
                 if (f) {
-                  setFilters(f);
+                  // 旧プリセットに無い新フィルタは既定値(false 等)で補完
+                  setFilters({ ...DEFAULT_FILTERS, ...f });
                   setGrowthRate((f.growth_rate ?? 0.03) * 100);
                 } else {
                   setFilters(DEFAULT_FILTERS);

@@ -23,6 +23,13 @@ export interface ScreeningParams {
   long_balance_trend?: "increasing" | "decreasing";
   margin_trend_months?: number;
   margin_trend_threshold_pct?: number;
+  // 買い時テクニカルシグナル（ON の時だけ送信）
+  ma_golden_cross_only?: boolean;
+  price_cross_ma25_only?: boolean;
+  price_cross_ma75_only?: boolean;
+  macd_golden_cross_only?: boolean;
+  rsi_rebound_only?: boolean;
+  pullback_buy_only?: boolean;
 }
 
 export const screeningApi = {

@@ -94,6 +94,13 @@ class ScreeningResult:
     is_owner_managed: bool = False
     owner_ratio: Decimal | None = None  # 代表者関連の持ち株比率合計 (%)
     owner_match_type: str | None = None  # "exact" / "family" / "company"
+    # 買い時テクニカルシグナル（データ不足時は False = 非該当）
+    ma_golden_cross: bool = False  # 25日線が75日線を上抜け
+    price_cross_ma25: bool = False  # 終値が25日線を上抜け
+    price_cross_ma75: bool = False  # 終値が75日線を上抜け
+    macd_golden_cross: bool = False  # MACDがシグナル線を上抜け
+    rsi_rebound: bool = False  # RSI(14)が30以下から反発
+    pullback_buy: bool = False  # 上昇トレンド中の押し目買い
 
 
 _LIQUIDITY_ORDER: dict[str, int] = {"high": 3, "medium": 2, "low": 1, "very_low": 0}
@@ -195,6 +202,13 @@ class ScreeningUseCase:
         margin_trend_months: int | None = None,  # 信用買残トレンドの評価期間（月）
         long_balance_trend: str | None = None,  # "increasing" / "decreasing"
         margin_trend_threshold_pct: Decimal | None = None,  # 変化率の閾値（絶対値, %）
+        # 買い時テクニカルシグナル（ON の時だけ該当銘柄に絞り込む）
+        ma_golden_cross_only: bool = False,
+        price_cross_ma25_only: bool = False,
+        price_cross_ma75_only: bool = False,
+        macd_golden_cross_only: bool = False,
+        rsi_rebound_only: bool = False,
+        pullback_buy_only: bool = False,
         code: str | None = None,  # 単一銘柄モード: 指定された場合は対象銘柄のみ計算
     ) -> list[ScreeningResult]:
         """スクリーニングを実行。
@@ -219,6 +233,14 @@ class ScreeningUseCase:
         cost_of_capital = MARKET_COST_OF_CAPITAL.get(market_type, MARKET_COST_OF_CAPITAL["JP"])
         can_calculate = growth_rate < cost_of_capital
 
+        # 買い時テクニカルシグナル: 必要な系列だけ計算し、利用時のみ日足を多めに取得する
+        need_ma = ma_golden_cross_only or price_cross_ma25_only or price_cross_ma75_only or pullback_buy_only
+        need_macd = macd_golden_cross_only
+        need_rsi = rsi_rebound_only
+        any_buy_signal = need_ma or need_macd or need_rsi
+        # 75日MA + クロス直前20日下 + 5日窓 に足る日数（利用時のみ）。通常は既存どおり25本。
+        price_limit = 120 if any_buy_signal else 25
+
         # 一括取得（N+1 問題の解消: ~10,500 クエリ → 7 クエリ）
         # 単一銘柄モード（code 指定時）は対象銘柄分のみ取得して全銘柄スキャンを避ける
         if code is not None and stocks and stocks[0].id is not None:
@@ -235,7 +257,7 @@ class ScreeningUseCase:
             try:
                 hl = self._price_repo.find_52w_high_low(sid) if self._price_repo else None
                 all_52w = {sid: hl} if hl else {}
-                recent_prices = self._price_repo.find_by_stock_id(sid, limit=25) if self._price_repo else []
+                recent_prices = self._price_repo.find_by_stock_id(sid, limit=price_limit) if self._price_repo else []
                 all_recent_prices = {sid: recent_prices} if recent_prices else {}
             except Exception:
                 import logging
@@ -257,7 +279,9 @@ class ScreeningUseCase:
                     logging.getLogger(__name__).warning("信用残高履歴の取得に失敗。フォールバック。", exc_info=True)
             try:
                 all_52w = self._price_repo.find_all_52w_high_low() if self._price_repo else {}
-                all_recent_prices = self._price_repo.find_all_recent_prices(limit=25) if self._price_repo else {}
+                all_recent_prices = (
+                    self._price_repo.find_all_recent_prices(limit=price_limit) if self._price_repo else {}
+                )
             except Exception:
                 import logging
 
@@ -319,6 +343,9 @@ class ScreeningUseCase:
                 latest_price=stock.latest_price,
                 high_low=all_52w.get(stock.id),
                 recent_prices=all_recent_prices.get(stock.id, []),
+                need_ma=need_ma,
+                need_macd=need_macd,
+                need_rsi=need_rsi,
             )
 
             # 配当メトリクスの計算
@@ -430,6 +457,21 @@ class ScreeningUseCase:
                     threshold = margin_trend_threshold_pct or Decimal(0)
                     if mtm.long_balance_change_pct < threshold:
                         continue
+
+            # 買い時テクニカルシグナルフィルター（ON の時、該当しない銘柄を除外）
+            # データ不足の銘柄は tm 側が False を返すため確実に除外される
+            if ma_golden_cross_only and not tm.ma_golden_cross:
+                continue
+            if price_cross_ma25_only and not tm.price_cross_ma25:
+                continue
+            if price_cross_ma75_only and not tm.price_cross_ma75:
+                continue
+            if macd_golden_cross_only and not tm.macd_golden_cross:
+                continue
+            if rsi_rebound_only and not tm.rsi_rebound:
+                continue
+            if pullback_buy_only and not tm.pullback_buy:
+                continue
 
             # 株式分割調整済みBPS（adj_factor は手動入力データでは 1.0 のまま）
             effective_bps = (
@@ -558,6 +600,12 @@ class ScreeningUseCase:
                         is_owner_managed=is_owner,
                         owner_ratio=_owner_ratio,
                         owner_match_type=_owner_type,
+                        ma_golden_cross=tm.ma_golden_cross,
+                        price_cross_ma25=tm.price_cross_ma25,
+                        price_cross_ma75=tm.price_cross_ma75,
+                        macd_golden_cross=tm.macd_golden_cross,
+                        rsi_rebound=tm.rsi_rebound,
+                        pullback_buy=tm.pullback_buy,
                     )
                 )
             else:
@@ -625,6 +673,12 @@ class ScreeningUseCase:
                         is_owner_managed=is_owner,
                         owner_ratio=_owner_ratio,
                         owner_match_type=_owner_type,
+                        ma_golden_cross=tm.ma_golden_cross,
+                        price_cross_ma25=tm.price_cross_ma25,
+                        price_cross_ma75=tm.price_cross_ma75,
+                        macd_golden_cross=tm.macd_golden_cross,
+                        rsi_rebound=tm.rsi_rebound,
+                        pullback_buy=tm.pullback_buy,
                     )
                 )
 

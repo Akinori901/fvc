@@ -6,8 +6,15 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from .stock_technical_indicators import compute_macd, compute_rsi, compute_sma
+
 if TYPE_CHECKING:
     from .entities import PriceEntity
+
+# 買い時シグナル判定のパラメータ
+_RECENT_WINDOW = 5  # クロス/反発は直近5営業日以内に発生
+_BELOW_DAYS = 20  # クロス直前に20営業日以上、下側にあったこと（MA/株価ブレイク系のみ）
+_BUY_SIGNAL_MIN_LEN = 100  # 75日MA + 20日下 + 5日窓 に足る最低日数。未満は判定対象外
 
 
 @dataclass
@@ -21,6 +28,13 @@ class TechnicalMetrics:
     ma_25_deviation: Decimal | None  # 25日移動平均乖離率
     momentum_signal: str | None  # "strong_buy" / "buy" / "neutral" / "caution" / "sell"
     avg_turnover_20d: Decimal | None  # 売買代金20日平均（円）
+    # --- 買い時シグナル（データ不足時は False = 非該当） ---
+    ma_golden_cross: bool = False  # 25日線が75日線を上抜け（20日下→直近5日）
+    price_cross_ma25: bool = False  # 終値が25日線を上抜け（20日下→直近5日）
+    price_cross_ma75: bool = False  # 終値が75日線を上抜け（20日下→直近5日）
+    macd_golden_cross: bool = False  # MACDがシグナル線を上抜け（直近5日）
+    rsi_rebound: bool = False  # RSI(14)が30以下から30を上抜け（直近5日）
+    pullback_buy: bool = False  # 上昇トレンド中の押し目買い（直近5日）
 
 
 def _compute_momentum_signal(
@@ -47,10 +61,124 @@ def _compute_momentum_signal(
     return "sell"
 
 
+def _crossed_up(
+    a: list[Decimal | None],
+    b: list[Decimal | None],
+    *,
+    require_below: bool,
+) -> bool:
+    """系列 a が系列 b を直近5営業日以内に下から上へ抜けたか判定する。
+
+    require_below=True の場合、クロス直前の20営業日以上 a < b が継続していたことも要求する
+    （MA/株価ブレイク系の「しばらく下にあった後の上抜け」）。
+    a / b は古い順（末尾が最新）で、要素は Decimal | None。
+    """
+    n = len(a)
+    cross_idx: int | None = None
+    for i in range(max(1, n - _RECENT_WINDOW), n):
+        pa, pb, ca, cb = a[i - 1], b[i - 1], a[i], b[i]
+        if pa is None or pb is None or ca is None or cb is None:
+            continue
+        if pa <= pb and ca > cb:
+            cross_idx = i  # 最も新しい上抜け点を採用
+    if cross_idx is None:
+        return False
+    if not require_below:
+        return True
+    start = cross_idx - _BELOW_DAYS
+    if start < 0:
+        return False
+    for j in range(start, cross_idx):
+        aj, bj = a[j], b[j]
+        if aj is None or bj is None or aj >= bj:
+            return False
+    return True
+
+
+def _rebound_up(series: list[Decimal | None], threshold: Decimal) -> bool:
+    """series が直近5営業日以内に threshold を下から上へ抜けたか（RSI反発用）。"""
+    n = len(series)
+    for i in range(max(1, n - _RECENT_WINDOW), n):
+        prev, curr = series[i - 1], series[i]
+        if prev is None or curr is None:
+            continue
+        if prev <= threshold and curr > threshold:
+            return True
+    return False
+
+
+def _compute_buy_signals(
+    recent_prices: list[PriceEntity],
+    *,
+    need_ma: bool,
+    need_macd: bool,
+    need_rsi: bool,
+) -> dict[str, bool]:
+    """買い時シグナルを判定する。recent_prices は日付降順（先頭が最新）。
+
+    データが100営業日未満の銘柄、または該当フィルタが不要な系列は計算せず False を返す。
+    """
+    result = {
+        "ma_golden_cross": False,
+        "price_cross_ma25": False,
+        "price_cross_ma75": False,
+        "macd_golden_cross": False,
+        "rsi_rebound": False,
+        "pullback_buy": False,
+    }
+    if len(recent_prices) < _BUY_SIGNAL_MIN_LEN:
+        return result
+
+    # 古い順（末尾が最新）に並べ替え
+    closes: list[Decimal | None] = [p.close_price for p in reversed(recent_prices)]
+    n = len(closes)
+
+    if need_ma:
+        # compute_sma は list[Decimal] 前提。closes は全て非 None
+        closes_nonnull = [c for c in closes if c is not None]
+        sma25 = compute_sma(closes_nonnull, 25)
+        sma75 = compute_sma(closes_nonnull, 75)
+        result["ma_golden_cross"] = _crossed_up(sma25, sma75, require_below=True)
+        result["price_cross_ma25"] = _crossed_up(closes, sma25, require_below=True)
+        result["price_cross_ma75"] = _crossed_up(closes, sma75, require_below=True)
+        # 押し目買い: 終値が25日線を直近5日で上抜け、かつその時点で 25日線 > 75日線（上昇トレンド継続）
+        for i in range(max(1, n - _RECENT_WINDOW), n):
+            c_prev, c_curr = closes[i - 1], closes[i]
+            m25_prev, m25_curr, m75_curr = sma25[i - 1], sma25[i], sma75[i]
+            if None in (c_prev, c_curr, m25_prev, m25_curr, m75_curr):
+                continue
+            if c_prev <= m25_prev and c_curr > m25_curr and m25_curr > m75_curr:  # type: ignore[operator]
+                result["pullback_buy"] = True
+                break
+
+    if need_macd:
+        closes_nonnull = [c for c in closes if c is not None]
+        _, _, hist = compute_macd(closes_nonnull, 12, 26, 9)
+        # ヒストグラムが負→正（MACDがシグナル線を上抜け）を直近5日で検出
+        for i in range(max(1, len(hist) - _RECENT_WINDOW), len(hist)):
+            prev, curr = hist[i - 1], hist[i]
+            if prev is None or curr is None:
+                continue
+            if prev <= 0 and curr > 0:
+                result["macd_golden_cross"] = True
+                break
+
+    if need_rsi:
+        closes_nonnull = [c for c in closes if c is not None]
+        rsi = compute_rsi(closes_nonnull, 14)
+        result["rsi_rebound"] = _rebound_up(rsi, Decimal("30"))
+
+    return result
+
+
 def compute_technical_metrics(
     latest_price: Decimal | None,
     high_low: tuple[Decimal, Decimal] | None,
     recent_prices: list[PriceEntity],
+    *,
+    need_ma: bool = False,
+    need_macd: bool = False,
+    need_rsi: bool = False,
 ) -> TechnicalMetrics:
     """テクニカル指標を計算する。
 
@@ -60,7 +188,23 @@ def compute_technical_metrics(
         recent_prices: 日付降順の直近株価リスト（最大25件）。MA25・出来高比率計算用。
     """
     if latest_price is None or high_low is None:
-        return TechnicalMetrics(None, None, None, None, None, None, None)
+        # 52週データが無くても、価格系列があれば買い時シグナルは判定できる
+        buy = _compute_buy_signals(recent_prices, need_ma=need_ma, need_macd=need_macd, need_rsi=need_rsi)
+        return TechnicalMetrics(
+            price_position_52w=None,
+            near_52w_high=None,
+            distance_from_52w_high=None,
+            volume_ratio_20d=None,
+            ma_25_deviation=None,
+            momentum_signal=None,
+            avg_turnover_20d=None,
+            ma_golden_cross=buy["ma_golden_cross"],
+            price_cross_ma25=buy["price_cross_ma25"],
+            price_cross_ma75=buy["price_cross_ma75"],
+            macd_golden_cross=buy["macd_golden_cross"],
+            rsi_rebound=buy["rsi_rebound"],
+            pullback_buy=buy["pullback_buy"],
+        )
 
     high, low = high_low
 
@@ -103,6 +247,9 @@ def compute_technical_metrics(
     # モメンタムシグナル
     signal = _compute_momentum_signal(position, volume_ratio, ma_25_dev)
 
+    # 買い時シグナル（該当フィルタ利用時のみ計算。不要なら全 False）
+    buy = _compute_buy_signals(recent_prices, need_ma=need_ma, need_macd=need_macd, need_rsi=need_rsi)
+
     return TechnicalMetrics(
         price_position_52w=position,
         near_52w_high=near_high,
@@ -111,6 +258,12 @@ def compute_technical_metrics(
         ma_25_deviation=ma_25_dev,
         momentum_signal=signal,
         avg_turnover_20d=avg_turnover,
+        ma_golden_cross=buy["ma_golden_cross"],
+        price_cross_ma25=buy["price_cross_ma25"],
+        price_cross_ma75=buy["price_cross_ma75"],
+        macd_golden_cross=buy["macd_golden_cross"],
+        rsi_rebound=buy["rsi_rebound"],
+        pullback_buy=buy["pullback_buy"],
     )
 
 
