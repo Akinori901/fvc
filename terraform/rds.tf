@@ -1,5 +1,5 @@
 # =============================================================================
-# RDS MySQL 8.0
+# RDS MySQL 8.4
 # =============================================================================
 
 resource "aws_db_subnet_group" "main" {
@@ -9,9 +9,10 @@ resource "aws_db_subnet_group" "main" {
   tags = { Name = "${var.project_name}-db-subnet-group" }
 }
 
-resource "aws_db_parameter_group" "mysql80" {
-  name   = "${var.project_name}-mysql80"
-  family = "mysql8.0"
+resource "aws_db_parameter_group" "mysql84" {
+  name        = "${var.project_name}-mysql84"
+  family      = "mysql8.4"
+  description = "fvc MySQL 8.4 params (utf8mb4)"
 
   parameter {
     name  = "character_set_server"
@@ -43,14 +44,14 @@ resource "aws_db_parameter_group" "mysql80" {
     value = "utf8mb4"
   }
 
-  tags = { Name = "${var.project_name}-mysql80-params" }
+  tags = { Name = "${var.project_name}-mysql84-params" }
 }
 
 resource "aws_db_instance" "main" {
   identifier = "${var.project_name}-db"
 
   engine         = "mysql"
-  engine_version = "8.0"
+  engine_version = "8.4.10"
   instance_class = "db.t3.micro"
 
   allocated_storage     = 20
@@ -64,7 +65,7 @@ resource "aws_db_instance" "main" {
 
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
-  parameter_group_name   = aws_db_parameter_group.mysql80.name
+  parameter_group_name   = aws_db_parameter_group.mysql84.name
 
   publicly_accessible = false
   multi_az            = false

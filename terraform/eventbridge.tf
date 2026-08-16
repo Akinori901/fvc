@@ -559,3 +559,68 @@ resource "aws_scheduler_schedule" "generate_recommendations_daily" {
 
   state = "ENABLED"
 }
+
+# -----------------------------------------------------------------------------
+# スクリーニング一覧スナップショット生成（平日 8:45 / 17:45 JST）
+# 朝の株価同期(8:00)後と、夕方の財務同期(17:00)後に、全銘柄の growth_rate 非依存な
+# 計算結果を t_screening_snapshots に事前計算・保存する。銘柄一覧APIはこれを SELECT
+# するだけで即応答できる（リクエスト毎の全件フル計算を回避）。
+# -----------------------------------------------------------------------------
+
+resource "aws_scheduler_schedule" "generate_screening_morning" {
+  name       = "${var.project_name}-generate-screening-morning"
+  group_name = aws_scheduler_schedule_group.sync.name
+
+  schedule_expression          = "cron(45 8 ? * MON-FRI *)"
+  schedule_expression_timezone = "Asia/Tokyo"
+
+  flexible_time_window {
+    mode                      = "FLEXIBLE"
+    maximum_window_in_minutes = 15
+  }
+
+  target {
+    arn      = aws_lambda_function.worker.arn
+    role_arn = aws_iam_role.scheduler_execution.arn
+
+    input = jsonencode({
+      command = "generate_screening_snapshot"
+    })
+
+    retry_policy {
+      maximum_event_age_in_seconds = 3600
+      maximum_retry_attempts       = 2
+    }
+  }
+
+  state = "ENABLED"
+}
+
+resource "aws_scheduler_schedule" "generate_screening_evening" {
+  name       = "${var.project_name}-generate-screening-evening"
+  group_name = aws_scheduler_schedule_group.sync.name
+
+  schedule_expression          = "cron(45 17 ? * MON-FRI *)"
+  schedule_expression_timezone = "Asia/Tokyo"
+
+  flexible_time_window {
+    mode                      = "FLEXIBLE"
+    maximum_window_in_minutes = 15
+  }
+
+  target {
+    arn      = aws_lambda_function.worker.arn
+    role_arn = aws_iam_role.scheduler_execution.arn
+
+    input = jsonencode({
+      command = "generate_screening_snapshot"
+    })
+
+    retry_policy {
+      maximum_event_age_in_seconds = 3600
+      maximum_retry_attempts       = 2
+    }
+  }
+
+  state = "ENABLED"
+}

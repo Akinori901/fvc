@@ -22,6 +22,7 @@ from apps.auth_cognito.presentation.views.admin_user_view import (
     AdminUserDisableView,
     AdminUserEnableView,
     AdminUserListCreateView,
+    AdminUserResendInviteView,
 )
 
 urlpatterns = [
@@ -40,6 +41,11 @@ urlpatterns = [
         "admin/users/<int:user_id>/enable/",
         AdminUserEnableView.as_view(),
         name="admin-user-enable",
+    ),
+    path(
+        "admin/users/<int:user_id>/resend-invite/",
+        AdminUserResendInviteView.as_view(),
+        name="admin-user-resend-invite",
     ),
     path(
         "admin/users/<int:user_id>/allowed-emails/",

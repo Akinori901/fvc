@@ -15,14 +15,14 @@ import {
   InputAdornment,
   Tooltip,
 } from "@mui/material";
-import { DataGrid, type GridColDef } from "@mui/x-data-grid";
+import { DataGrid, type GridColDef, type GridSortModel } from "@mui/x-data-grid";
 import SyncIcon from "@mui/icons-material/Sync";
 import SearchIcon from "@mui/icons-material/Search";
 import ListIcon from "@mui/icons-material/List";
 import TuneIcon from "@mui/icons-material/Tune";
 import StarIcon from "@mui/icons-material/Star";
 import StarBorderIcon from "@mui/icons-material/StarBorder";
-import { useScreening } from "@/hooks/useScreening";
+import { useScreening, useScreeningSectors } from "@/hooks/useScreening";
 import { useSyncTrigger } from "@/hooks/useSync";
 import { useWatchlist, useAddToWatchlist, useRemoveFromWatchlist } from "@/hooks/useWatchlist";
 import { useScreeningPresets, useSaveScreeningPreset, useDeleteScreeningPreset } from "@/hooks/useScreeningPresets";
@@ -52,6 +52,18 @@ export default function StockListPage() {
   const [filters, setFilters] = useState<ScreeningFilters>(DEFAULT_FILTERS);
   const [filterModalOpen, setFilterModalOpen] = useState(false);
   const [selectedPresetId, setSelectedPresetId] = useState<number | null>(null);
+  // サーバーサイド ページング / ソート
+  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 25 });
+  const [sortModel, setSortModel] = useState<GridSortModel>([{ field: "overall_rating", sort: "desc" }]);
+  // DataGrid の列名 → API の sort_by キー（overall_rating はBEの overall_score）
+  const SORT_FIELD_MAP: Record<string, string> = {
+    overall_rating: "overall_score",
+    discount_rate: "discount_rate",
+    roe: "roe",
+    dividend_yield: "dividend_yield",
+    fcf_yield: "fcf_yield",
+    sl_ratio: "sl_ratio",
+  };
 
   // プリセット
   const { data: presets } = useScreeningPresets();
@@ -70,12 +82,23 @@ export default function StockListPage() {
     }
   }, [presets]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // フィルターをAPIパラメータに変換
+  // フィルターをAPIパラメータに変換（ページング/ソート/検索はサーバーサイド）
+  const sortField = sortModel[0] ? (SORT_FIELD_MAP[sortModel[0].field] ?? "overall_score") : "overall_score";
+  const sortOrder = sortModel[0]?.sort === "asc" ? "asc" : "desc";
+  const pageParams = {
+    limit: paginationModel.pageSize,
+    offset: paginationModel.page * paginationModel.pageSize,
+    sort_by: sortField,
+    order: sortOrder as "asc" | "desc",
+    search: searchText.trim() || undefined,
+  };
   const apiParams = useMemo(() => {
     if (mode !== "screening") {
-      return { growth_rate: growthRate / 100, include_inactive: filters.include_inactive };
+      return { growth_rate: growthRate / 100, include_inactive: filters.include_inactive, ...pageParams };
     }
     return {
+      ...pageParams,
+      min_overall_score: filters.min_overall_score ?? undefined,
       growth_rate: growthRate / 100,
       sector: filters.sector ?? undefined,
       include_inactive: filters.include_inactive,
@@ -107,9 +130,12 @@ export default function StockListPage() {
       rsi_rebound_only: filters.rsi_rebound_only || undefined,
       pullback_buy_only: filters.pullback_buy_only || undefined,
     };
-  }, [mode, growthRate, filters]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, growthRate, filters, paginationModel, sortModel, searchText]);
 
-  const { data: screeningResults, isLoading: screeningLoading } = useScreening(apiParams);
+  const { data: screeningPage, isLoading: screeningLoading } = useScreening(apiParams);
+  const screeningResults = screeningPage?.results ?? [];
+  const rowCount = screeningPage?.count ?? 0;
   const syncMutation = useSyncTrigger();
 
   const { data: watchlist } = useWatchlist();
@@ -121,9 +147,7 @@ export default function StockListPage() {
     [watchlist]
   );
 
-  const sectors = screeningResults
-    ? [...new Set(screeningResults.map((s) => s.sector).filter(Boolean))].sort()
-    : [];
+  const { data: sectors = [] } = useScreeningSectors("JP");
 
   // アクティブフィルター数（デフォルトと異なるフィールド数）
   const activeFilterCount = useMemo(() => {
@@ -157,40 +181,7 @@ export default function StockListPage() {
     return count;
   }, [filters]);
 
-  const filteredResults = useMemo(() => {
-    let results = screeningResults ?? [];
-    if (searchText.trim()) {
-      const q = searchText.toLowerCase();
-      results = results.filter(
-        (r) => r.code.toLowerCase().includes(q) || r.name.toLowerCase().includes(q)
-      );
-    }
-    // min_overall_score はフロントエンド側でフィルタリング
-    if (mode === "screening" && filters.min_overall_score != null) {
-      const threshold = filters.min_overall_score;
-      results = results.filter((r: ScreeningResult) => {
-        const rating = computeOverallRating({
-          evaluationZone: r.evaluation_zone ?? null,
-          growthRateLabel: r.growth_rate_label ?? null,
-          roeTrend: r.roe_trend ?? null,
-          epsCagr3y: r.eps_cagr_3y != null ? Number(r.eps_cagr_3y) : null,
-          epsGrowthYoy: r.eps_growth_yoy != null ? Number(r.eps_growth_yoy) : null,
-          slRatio: r.sl_ratio != null ? Number(r.sl_ratio) : null,
-          momentumSignal: r.momentum_signal ?? null,
-          dividendYield: r.dividend_yield != null ? Number(r.dividend_yield) : null,
-          payoutRatio: r.payout_ratio != null ? Number(r.payout_ratio) : null,
-          consecutiveDividendYears: r.consecutive_dividend_years,
-          progressiveDividendYears: r.progressive_dividend_years,
-          fcfYield: r.fcf_yield != null ? Number(r.fcf_yield) : null,
-          fcfMargin: r.fcf_margin != null ? Number(r.fcf_margin) : null,
-          fcf: r.fcf,
-        });
-        return rating.score >= threshold;
-      });
-    }
-    return results;
-  }, [screeningResults, searchText, mode, filters.min_overall_score]);
-
+  // 検索・min_overall_score・ソート・ページングはすべてサーバーサイドで処理される
   const headerWithTooltip = (label: string, tooltip: string) => () => (
     <Tooltip title={tooltip} arrow placement="top">
       <span style={{ cursor: "help" }}>{label}</span>
@@ -825,7 +816,10 @@ export default function StockListPage() {
           size="small"
           placeholder="コード・銘柄名で検索"
           value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
+          onChange={(e) => {
+            setSearchText(e.target.value);
+            setPaginationModel((p) => ({ ...p, page: 0 }));
+          }}
           sx={{ width: 240 }}
           slotProps={{
             input: {
@@ -900,12 +894,9 @@ export default function StockListPage() {
             </Badge>
           </>
         )}
-        {filteredResults.length > 0 && (
+        {rowCount > 0 && (
           <Typography variant="body2" color="text.secondary">
-            {filteredResults.length} 銘柄
-            {searchText.trim() && screeningResults && filteredResults.length !== screeningResults.length
-              ? ` / ${screeningResults.length} 件中`
-              : ""}
+            {rowCount.toLocaleString()} 銘柄
           </Typography>
         )}
       </Stack>
@@ -919,13 +910,19 @@ export default function StockListPage() {
       />
 
       <DataGrid
-        rows={filteredResults}
+        rows={screeningResults}
         columns={columns}
         getRowId={(row) => row.code}
         loading={screeningLoading}
-        initialState={{
-          pagination: { paginationModel: { pageSize: 25 } },
-          sorting: { sortModel: [{ field: "overall_rating", sort: "desc" }] },
+        paginationMode="server"
+        sortingMode="server"
+        rowCount={rowCount}
+        paginationModel={paginationModel}
+        onPaginationModelChange={setPaginationModel}
+        sortModel={sortModel}
+        onSortModelChange={(m) => {
+          setSortModel(m);
+          setPaginationModel((p) => ({ ...p, page: 0 })); // 並べ替えたら先頭ページへ
         }}
         pageSizeOptions={[25, 50, 100]}
         disableRowSelectionOnClick

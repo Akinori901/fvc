@@ -104,3 +104,7 @@ class CognitoUserPoolRepository(ABC):
         `DesiredDeliveryMediums=["EMAIL"]`。
         既存ユーザーの場合は `CognitoUserAlreadyExistsError` を raise する。
         """
+
+    @abstractmethod
+    def resend_invite(self, email: str) -> None:
+        """既存(未確認)ユーザーへ招待メールを再送する (MessageAction=RESEND)。"""

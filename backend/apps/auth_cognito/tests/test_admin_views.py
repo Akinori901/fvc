@@ -302,6 +302,9 @@ class _FakeUserPoolRepo:
         if self._invite_raises is not None:
             raise self._invite_raises
 
+    def resend_invite(self, email: str) -> None:
+        self.invite_calls.append(email)
+
 
 @pytest.mark.django_db
 class TestAdminCognitoUserListView:

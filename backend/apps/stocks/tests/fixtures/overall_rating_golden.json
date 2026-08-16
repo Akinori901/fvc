@@ -1,0 +1,82 @@
+{
+  "_comment": "総合評価スコアの golden vector。BE(test_overall_rating.py)とFE(overallRating.test.ts)の双方が読み、TS/Python の数値一致を担保する。値を変える際は両テストを再実行すること。数値(eps_cagr_3y等の比率、dividend_yield等の%)は文字列で表現。",
+  "cases": [
+    {
+      "name": "all_none",
+      "inputs": {
+        "evaluation_zone": null, "growth_rate_label": null, "roe_trend": null,
+        "eps_cagr_3y": null, "eps_growth_yoy": null, "sl_ratio": null,
+        "momentum_signal": null, "dividend_yield": null, "payout_ratio": null,
+        "consecutive_dividend_years": null, "progressive_dividend_years": null,
+        "fcf_yield": null, "fcf_margin": null, "fcf": null, "prev_fcf": null
+      },
+      "expected_score": 0
+    },
+    {
+      "name": "very_cheap_top",
+      "inputs": {
+        "evaluation_zone": "very_cheap", "growth_rate_label": "かなり強気", "roe_trend": "improving",
+        "eps_cagr_3y": "0.25", "eps_growth_yoy": null, "sl_ratio": "1.0",
+        "momentum_signal": "strong_buy", "dividend_yield": "4.0", "payout_ratio": "50",
+        "consecutive_dividend_years": 10, "progressive_dividend_years": 5,
+        "fcf_yield": "9", "fcf_margin": "12", "fcf": 1000, "prev_fcf": 900
+      },
+      "expected_score": 13
+    },
+    {
+      "name": "very_expensive_bottom",
+      "inputs": {
+        "evaluation_zone": "very_expensive", "growth_rate_label": "マイナス成長", "roe_trend": "declining",
+        "eps_cagr_3y": "-0.3", "eps_growth_yoy": null, "sl_ratio": "0.03",
+        "momentum_signal": "sell", "dividend_yield": "4.0", "payout_ratio": "80",
+        "consecutive_dividend_years": 0, "progressive_dividend_years": 0,
+        "fcf_yield": null, "fcf_margin": null, "fcf": -500, "prev_fcf": -300
+      },
+      "expected_score": -16
+    },
+    {
+      "name": "roe_persistence_doubt",
+      "inputs": {
+        "evaluation_zone": "cheap", "growth_rate_label": "ROE持続性に疑念", "roe_trend": "stable",
+        "eps_cagr_3y": null, "eps_growth_yoy": "0.05", "sl_ratio": "0.5",
+        "momentum_signal": "neutral", "dividend_yield": null, "payout_ratio": null,
+        "consecutive_dividend_years": null, "progressive_dividend_years": null,
+        "fcf_yield": "5", "fcf_margin": "8", "fcf": 200, "prev_fcf": 100
+      },
+      "expected_score": 0
+    },
+    {
+      "name": "eps_yoy_fallback_and_margin_buy_偏り",
+      "inputs": {
+        "evaluation_zone": "fair", "growth_rate_label": "普通", "roe_trend": null,
+        "eps_cagr_3y": null, "eps_growth_yoy": "0.22", "sl_ratio": "0.2",
+        "momentum_signal": "buy", "dividend_yield": "2.0", "payout_ratio": "30",
+        "consecutive_dividend_years": 6, "progressive_dividend_years": 0,
+        "fcf_yield": "3", "fcf_margin": "4", "fcf": 50, "prev_fcf": 40
+      },
+      "expected_score": 2
+    },
+    {
+      "name": "high_yield_risky_no_progressive",
+      "inputs": {
+        "evaluation_zone": "fair", "growth_rate_label": null, "roe_trend": null,
+        "eps_cagr_3y": null, "eps_growth_yoy": null, "sl_ratio": null,
+        "momentum_signal": null, "dividend_yield": "5.0", "payout_ratio": "75",
+        "consecutive_dividend_years": 3, "progressive_dividend_years": 0,
+        "fcf_yield": null, "fcf_margin": null, "fcf": null, "prev_fcf": null
+      },
+      "expected_score": -2
+    },
+    {
+      "name": "no_dividend_and_fcf_single_minus",
+      "inputs": {
+        "evaluation_zone": "expensive", "growth_rate_label": "低成長", "roe_trend": "stable",
+        "eps_cagr_3y": "0.0", "eps_growth_yoy": null, "sl_ratio": "3.0",
+        "momentum_signal": "caution", "dividend_yield": "0", "payout_ratio": null,
+        "consecutive_dividend_years": null, "progressive_dividend_years": null,
+        "fcf_yield": null, "fcf_margin": null, "fcf": -100, "prev_fcf": 50
+      },
+      "expected_score": -5
+    }
+  ]
+}

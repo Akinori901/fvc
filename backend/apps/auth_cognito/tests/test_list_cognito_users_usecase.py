@@ -45,6 +45,9 @@ class _FakeUserPoolRepo(CognitoUserPoolRepository):
     def admin_create_user(self, email: str) -> None:
         raise NotImplementedError
 
+    def resend_invite(self, email: str) -> None:
+        raise NotImplementedError
+
 
 @pytest.mark.django_db
 class TestListCognitoUsersUseCase:

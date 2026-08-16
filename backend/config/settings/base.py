@@ -51,6 +51,10 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
+    # レスポンスを gzip 圧縮する。スクリーニング等の大きな JSON を圧縮し、
+    # Lambda のレスポンス上限(6MB)超過を防ぐ。Mangum は gzip バイナリを
+    # 自動的に base64 で返すため API Gateway 経由でも正しく伝わる。
+    "django.middleware.gzip.GZipMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",

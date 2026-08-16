@@ -82,6 +82,9 @@ if TYPE_CHECKING:
     from apps.auth_cognito.application.usecases.remove_allowed_email_usecase import (
         RemoveAllowedEmailUseCase,
     )
+    from apps.auth_cognito.application.usecases.resend_invite_usecase import (
+        ResendInviteUseCase,
+    )
     from apps.auth_cognito.infrastructure.repositories.boto3_cognito_userpool_repository import (
         Boto3CognitoUserPoolRepository,
     )
@@ -1477,6 +1480,15 @@ def create_admin_user_usecase() -> CreateAdminUserUseCase:
         admin_user_create_service=admin_user_create_service(),
         allowed_email_service=allowed_email_service(),
         invite_service=cognito_invite_service(),
+    )
+
+
+def resend_invite_usecase() -> ResendInviteUseCase:
+    from apps.auth_cognito.application.usecases.resend_invite_usecase import ResendInviteUseCase
+
+    return ResendInviteUseCase(
+        invite_service=cognito_invite_service(),
+        userpool_repo=cognito_userpool_repository(),
     )
 
 

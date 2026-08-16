@@ -23,3 +23,7 @@ class CognitoInviteService:
         boto3 の `ClientError` 等もそのまま呼び出し側に伝播させる (UseCase で握る)。
         """
         self._repo.admin_create_user(email)
+
+    def resend(self, email: str) -> None:
+        """既存(未確認)ユーザーへ招待メールを再送する (MessageAction=RESEND)。"""
+        self._repo.resend_invite(email)
