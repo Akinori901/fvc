@@ -56,6 +56,11 @@ resource "aws_lambda_function" "api" {
     aws_cloudwatch_log_group.lambda_api,
   ]
 
+  # image_uri は CD (GitHub Actions) が commit タグでデプロイ・管理するため terraform は無視する
+  lifecycle {
+    ignore_changes = [image_uri]
+  }
+
   tags = { Name = "${var.project_name}-api-lambda" }
 }
 
@@ -100,6 +105,11 @@ resource "aws_lambda_function" "worker" {
     aws_iam_role_policy_attachment.lambda_vpc,
     aws_cloudwatch_log_group.lambda_worker,
   ]
+
+  # image_uri は CD が commit タグでデプロイ・管理するため terraform は無視する
+  lifecycle {
+    ignore_changes = [image_uri]
+  }
 
   tags = { Name = "${var.project_name}-worker-lambda" }
 }

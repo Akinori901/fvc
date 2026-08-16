@@ -4,6 +4,7 @@ export interface ScreeningResult {
   code: string;
   name: string;
   sector: string;
+  overall_score: number | null; // BE算出の総合評価スコア（一覧のソート・フィルタ用）
   latest_price: string | null;
   latest_price_date: string | null;
   bps: string | null;
@@ -57,11 +58,5 @@ export interface ScreeningResult {
   is_owner_managed: boolean;
   owner_ratio: string | null;
   owner_match_type: "exact" | "family" | "company" | null;
-  // 買い時テクニカルシグナル
-  ma_golden_cross: boolean;
-  price_cross_ma25: boolean;
-  price_cross_ma75: boolean;
-  macd_golden_cross: boolean;
-  rsi_rebound: boolean;
-  pullback_buy: boolean;
+  // 買い時シグナルは絞り込み専用でレスポンスには含めない（ペイロード削減）
 }

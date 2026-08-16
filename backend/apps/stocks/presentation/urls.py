@@ -8,7 +8,7 @@ from .margin_views import StockMarginView
 from .recommendation_views import RecommendationsView
 from .reit_views import ReitListView
 from .screening_preset_views import ScreeningPresetDetailView, ScreeningPresetListView
-from .screening_views import ScreeningView
+from .screening_views import ScreeningSectorsView, ScreeningView
 from .settings_views import ApiConfigDetailView, ApiConfigListView
 from .sync_views import SyncLogListView, SyncTriggerView
 from .technical_views import StockTechnicalView
@@ -17,6 +17,7 @@ urlpatterns = [
     path("stocks/", views.StockListView.as_view(), name="stock-list"),
     path("stocks/recommendations/", RecommendationsView.as_view(), name="stock-recommendations"),
     path("stocks/screening/", ScreeningView.as_view(), name="stock-screening"),
+    path("stocks/screening/sectors/", ScreeningSectorsView.as_view(), name="screening-sectors"),
     path("stocks/screening/presets/", ScreeningPresetListView.as_view(), name="screening-preset-list"),
     path("stocks/screening/presets/<int:pk>/", ScreeningPresetDetailView.as_view(), name="screening-preset-detail"),
     path("stocks/etf/", EtfListView.as_view(), name="etf-list"),

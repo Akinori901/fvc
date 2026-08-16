@@ -120,6 +120,9 @@ sync-prices: ## 株価同期 (JP)
 sync-all: ## 全データ同期 (JP)
 	docker compose exec backend uv run python manage.py sync_all --market JP
 
+generate-screening: ## スクリーニング一覧スナップショット生成
+	docker compose exec backend uv run python manage.py generate_screening_snapshot
+
 cleanup-prices: ## 古い株価データ削除（2年以上前）
 	docker compose exec backend uv run python manage.py cleanup_old_prices
 

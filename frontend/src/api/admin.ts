@@ -38,6 +38,9 @@ export const adminApi = {
   enableUser: (userId: number) =>
     apiClient.post(`/admin/users/${userId}/enable/`),
 
+  resendInvite: (userId: number) =>
+    apiClient.post(`/admin/users/${userId}/resend-invite/`),
+
   deleteUser: (userId: number) => apiClient.delete(`/admin/users/${userId}/`),
 
   disableCognitoUser: (username: string) =>

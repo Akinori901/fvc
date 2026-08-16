@@ -39,7 +39,9 @@ class GeminiClientService(AbstractLlmClient):
     """
 
     _BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
-    _TIMEOUT = 60.0  # 個別株 AI 分析 (chat) 用
+    # 個別株 AI 分析 (chat) 用。API Gateway の 30 秒上限より短くし、
+    # 生成が長引いても API Gateway でぶら下がって 504 になる前に切って 500 を返す。
+    _TIMEOUT = 25.0
     _TIMEOUT_TOOLS = 40.0  # Function Calling 用 (Lambda 60s timeout の余裕)
 
     def __init__(self, api_key: str, model: str) -> None:
@@ -133,7 +135,8 @@ class GeminiClientService(AbstractLlmClient):
             "systemInstruction": {"parts": [{"text": system_prompt}]},
             "generationConfig": {
                 "temperature": 0.7,
-                "maxOutputTokens": 8192,
+                # 回答は system prompt で 3000 文字以内に指示済み。生成時間短縮のため上限を絞る
+                "maxOutputTokens": 4096,
             },
         }
 
@@ -200,7 +203,7 @@ class GeminiClientService(AbstractLlmClient):
         except (AiApiKeyInvalidError, _RetryableError):
             raise
         except httpx.TimeoutException as e:
-            raise TimeoutError("Gemini APIがタイムアウトしました（60秒）") from e
+            raise TimeoutError("AI分析がタイムアウトしました。もう一度お試しください。") from e
         except httpx.HTTPStatusError as e:
             raise RuntimeError(f"Gemini APIエラー: {e.response.status_code}") from e
 

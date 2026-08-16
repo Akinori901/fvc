@@ -102,3 +102,17 @@ class AdminUserEnableView(APIView):
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class AdminUserResendInviteView(APIView):
+    """`POST /api/admin/users/{user_id}/resend-invite/` — 招待メールを再送する。"""
+
+    permission_classes = [IsAuthenticated, IsSuperUser]
+
+    def post(self, request: Request, user_id: int) -> Response:
+        usecase = container.resend_invite_usecase()
+        try:
+            usecase.execute(user_id)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(status=status.HTTP_204_NO_CONTENT)

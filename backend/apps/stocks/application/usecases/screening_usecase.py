@@ -87,6 +87,7 @@ class ScreeningResult:
     dividend_score: int | None = None  # 配当スコア (-2 ~ +2)
     # FCF指標
     fcf: int | None = None  # FCF（百万円）
+    prev_fcf: int | None = None  # 前期FCF（百万円）。総合評価のFCF2期連続判定に使う
     fcf_yield: Decimal | None = None  # FCF利回り (%)
     fcf_margin: Decimal | None = None  # FCFマージン (%)
     fcf_score: int | None = None  # FCFスコア (-2 ~ +2)
@@ -209,6 +210,7 @@ class ScreeningUseCase:
         macd_golden_cross_only: bool = False,
         rsi_rebound_only: bool = False,
         pullback_buy_only: bool = False,
+        compute_buy_signals: bool = False,  # 絞り込まず買い時シグナルを全計算（スナップショット生成用）
         code: str | None = None,  # 単一銘柄モード: 指定された場合は対象銘柄のみ計算
     ) -> list[ScreeningResult]:
         """スクリーニングを実行。
@@ -234,9 +236,15 @@ class ScreeningUseCase:
         can_calculate = growth_rate < cost_of_capital
 
         # 買い時テクニカルシグナル: 必要な系列だけ計算し、利用時のみ日足を多めに取得する
-        need_ma = ma_golden_cross_only or price_cross_ma25_only or price_cross_ma75_only or pullback_buy_only
-        need_macd = macd_golden_cross_only
-        need_rsi = rsi_rebound_only
+        need_ma = (
+            compute_buy_signals
+            or ma_golden_cross_only
+            or price_cross_ma25_only
+            or price_cross_ma75_only
+            or pullback_buy_only
+        )
+        need_macd = compute_buy_signals or macd_golden_cross_only
+        need_rsi = compute_buy_signals or rsi_rebound_only
         any_buy_signal = need_ma or need_macd or need_rsi
         # 75日MA + クロス直前20日下 + 5日窓 に足る日数（利用時のみ）。通常は既存どおり25本。
         price_limit = 120 if any_buy_signal else 25
@@ -594,6 +602,7 @@ class ScreeningUseCase:
                         progressive_dividend_years=dm.progressive_dividend_years,
                         dividend_score=dm.dividend_score,
                         fcf=fm.fcf,
+                        prev_fcf=_prev_fcf,
                         fcf_yield=fm.fcf_yield,
                         fcf_margin=fm.fcf_margin,
                         fcf_score=fm.fcf_score,
@@ -667,6 +676,7 @@ class ScreeningUseCase:
                         progressive_dividend_years=dm.progressive_dividend_years,
                         dividend_score=dm.dividend_score,
                         fcf=fm.fcf,
+                        prev_fcf=_prev_fcf,
                         fcf_yield=fm.fcf_yield,
                         fcf_margin=fm.fcf_margin,
                         fcf_score=fm.fcf_score,

@@ -100,6 +100,20 @@ class Boto3CognitoUserPoolRepository(CognitoUserPoolRepository):
         except self._client.exceptions.UsernameExistsException as exc:
             raise CognitoUserAlreadyExistsError(email) from exc
 
+    def resend_invite(self, email: str) -> None:
+        """既存(未確認)ユーザーへ招待メールを再送する。
+
+        MessageAction=RESEND は admin_create_user を再送専用モードで呼ぶ指定で、
+        既存ユーザーでも UsernameExistsException を出さずに仮パスワードの
+        招待メールを再送する。
+        """
+        self._client.admin_create_user(
+            UserPoolId=self._user_pool_id,
+            Username=email,
+            MessageAction="RESEND",
+            DesiredDeliveryMediums=["EMAIL"],
+        )
+
     @classmethod
     def _to_entity(cls, raw: dict[str, Any]) -> CognitoUserInfo:
         attrs = cls._attrs_to_dict(raw.get("Attributes", []))

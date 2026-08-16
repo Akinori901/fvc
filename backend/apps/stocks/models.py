@@ -412,3 +412,75 @@ class RecommendationSnapshot(models.Model):
 
     def __str__(self) -> str:
         return f"[{self.get_category_display()}] {self.rank}位 {self.stock.code}"
+
+
+class ScreeningSnapshot(models.Model):
+    """スクリーニング（銘柄一覧）の事前計算スナップショット。
+
+    バッチ(generate_screening_snapshot)が全銘柄の growth_rate 非依存な計算結果
+    （テクニカル・配当・FCF・信用・オーナー・生財務・買い時シグナル）を保存する。
+    一覧APIは本テーブルを SELECT し、リクエスト時の growth_rate から適正株価・
+    評価ゾーン・総合評価スコアだけを軽量に再計算してページングする。
+    最新1世代のみ（バッチで全削除→再生成）。
+
+    - WHERE/検索に使う主要フィールドは個別カラム（インデックス対象）。
+    - 表示・リクエスト時の軽計算に使う残りの指標は metrics(JSONField) にまとめる。
+    """
+
+    stock = models.OneToOneField(
+        Stock,
+        on_delete=models.CASCADE,
+        related_name="screening_snapshot",
+        verbose_name="銘柄",
+    )
+    code = models.CharField("証券コード", max_length=16)
+    name = models.CharField("銘柄名", max_length=255)
+    sector = models.CharField("業種", max_length=100, blank=True)
+    market_type = models.CharField("市場区分", max_length=8, default="JP")
+    is_active = models.BooleanField("上場中", default=True)
+
+    # --- WHERE / ORDER BY に使う growth_rate 非依存の指標（個別カラム） ---
+    roe = models.DecimalField("ROE", max_digits=12, decimal_places=6, null=True, blank=True)
+    sl_ratio = models.DecimalField("信売比率", max_digits=12, decimal_places=4, null=True, blank=True)
+    roe_trend = models.CharField("ROEトレンド", max_length=16, null=True, blank=True)
+    dividend_yield = models.DecimalField("配当利回り", max_digits=8, decimal_places=4, null=True, blank=True)
+    fcf_yield = models.DecimalField("FCF利回り", max_digits=8, decimal_places=4, null=True, blank=True)
+    momentum_signal = models.CharField("モメンタム", max_length=16, null=True, blank=True)
+    liquidity_level = models.CharField("流動性", max_length=16, null=True, blank=True)
+    is_owner_managed = models.BooleanField("オーナー経営", default=False)
+
+    # --- 買い時テクニカルシグナル（絞り込み用 bool） ---
+    ma_golden_cross = models.BooleanField(default=False)
+    price_cross_ma25 = models.BooleanField(default=False)
+    price_cross_ma75 = models.BooleanField(default=False)
+    macd_golden_cross = models.BooleanField(default=False)
+    rsi_rebound = models.BooleanField(default=False)
+    pullback_buy = models.BooleanField(default=False)
+
+    # --- 表示 / リクエスト時の軽計算に使う残りの指標一式 ---
+    # latest_price, bps, eps, current_pbr, implied_growth_rate,
+    # eps_growth_yoy, eps_cagr_3y, revenue_growth_yoy, op_income_growth_yoy,
+    # company_forecast_growth_rate, long_balance, short_balance,
+    # long_balance_change_pct, long_balance_trend, price_position_52w,
+    # distance_from_52w_high, volume_ratio_20d, ma_25_deviation,
+    # avg_turnover_20d, payout_ratio, consecutive_dividend_years,
+    # progressive_dividend_years, dividend_score, fcf, prev_fcf, fcf_margin,
+    # fcf_score, owner_ratio, owner_match_type, not_calculable_reason,
+    # is_manual_financial（すべて growth_rate 非依存）
+    metrics = models.JSONField("その他指標", default=dict)
+
+    generated_at = models.DateTimeField("生成日時", auto_now_add=True)
+
+    class Meta:
+        db_table = "t_screening_snapshots"
+        indexes = [
+            models.Index(fields=["market_type", "is_active"]),
+            models.Index(fields=["market_type", "is_active", "roe"]),
+            models.Index(fields=["market_type", "is_active", "dividend_yield"]),
+            models.Index(fields=["code"]),
+        ]
+        verbose_name = "スクリーニングスナップショット"
+        verbose_name_plural = "スクリーニングスナップショット"
+
+    def __str__(self) -> str:
+        return f"{self.code} {self.name}"

@@ -79,6 +79,11 @@ export default function AdminUsersTable() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["adminUsers"] }),
   });
 
+  const resendInviteMutation = useMutation({
+    mutationFn: (userId: number) => adminApi.resendInvite(userId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["adminUsers"] }),
+  });
+
   const deleteUserMutation = useMutation({
     mutationFn: (userId: number) => adminApi.deleteUser(userId),
     onSuccess: () => {
@@ -189,6 +194,8 @@ export default function AdminUsersTable() {
                   isToggleActivePending={
                     disableUserMutation.isPending || enableUserMutation.isPending
                   }
+                  onResendInvite={() => resendInviteMutation.mutate(user.id)}
+                  isResendPending={resendInviteMutation.isPending}
                 />
               ))
             )}
@@ -243,6 +250,8 @@ interface UserRowProps {
   onRequestDeleteUser: () => void;
   onToggleActive: () => void;
   isToggleActivePending: boolean;
+  onResendInvite: () => void;
+  isResendPending: boolean;
 }
 
 function UserRow({
@@ -254,6 +263,8 @@ function UserRow({
   onRequestDeleteUser,
   onToggleActive,
   isToggleActivePending,
+  onResendInvite,
+  isResendPending,
 }: UserRowProps) {
   return (
     <>
@@ -316,6 +327,15 @@ function UserRow({
                     disabled={isToggleActivePending}
                   >
                     {user.is_active ? "ユーザーを無効化" : "ユーザーを有効化"}
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="primary"
+                    onClick={onResendInvite}
+                    disabled={isResendPending}
+                  >
+                    招待メール再送
                   </Button>
                   <Button
                     size="small"

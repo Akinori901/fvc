@@ -30,9 +30,24 @@ export interface ScreeningParams {
   macd_golden_cross_only?: boolean;
   rsi_rebound_only?: boolean;
   pullback_buy_only?: boolean;
+  // ページング/ソート/検索（サーバーサイド）
+  limit?: number;
+  offset?: number;
+  sort_by?: string;
+  order?: "asc" | "desc";
+  search?: string;
+  min_overall_score?: number;
+}
+
+export interface ScreeningPage {
+  count: number;
+  results: ScreeningResult[];
+  generated_at: string | null;
 }
 
 export const screeningApi = {
   search: (params: ScreeningParams = {}) =>
-    apiClient.get<ScreeningResult[]>("/stocks/screening/", { params }),
+    apiClient.get<ScreeningPage>("/stocks/screening/", { params }),
+  sectors: (marketType = "JP") =>
+    apiClient.get<string[]>("/stocks/screening/sectors/", { params: { market_type: marketType } }),
 };

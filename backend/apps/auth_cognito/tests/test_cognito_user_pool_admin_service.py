@@ -46,6 +46,9 @@ class _FakeUserPoolRepo(CognitoUserPoolRepository):
     def admin_create_user(self, email: str) -> None:  # pragma: no cover - 未使用
         raise NotImplementedError
 
+    def resend_invite(self, email: str) -> None:  # pragma: no cover - 未使用
+        raise NotImplementedError
+
 
 @pytest.mark.django_db
 class TestCognitoUserPoolAdminService:
