@@ -26,24 +26,38 @@ class FinancialSyncService:
         self._financial_repo = financial_repo
         self._fallback_provider = fallback_provider
 
+    # バルク取得の既定ルックバック日数。バルクAPIは日付範囲を1日=1リクエストで
+    # 並列取得するため、窓が広いほど同時リクエスト数が増え 429(レート制限) を招く。
+    # 日次同期は直近の新規開示だけ拾えれば十分なので短めにする（取りこぼし補完は
+    # lookback_days を広げて手動実行する運用でカバー）。
+    _DEFAULT_BULK_LOOKBACK_DAYS = 7
+
     def sync(
         self,
         provider: MarketDataProvider,
         market_type: str,
         codes: list[str] | None = None,
         fiscal_year: int | None = None,
+        lookback_days: int | None = None,
     ) -> tuple[int, int, list[dict[str, str]]]:
         """財務データを同期し (成功件数, エラー件数, エラー詳細) を返す。
 
-        財務データは銘柄ごとに get_fin_summary を呼ぶ。
-        コード未指定の場合は株価データが存在する銘柄（watchlist/active銘柄）のみ対象。
+        バルク取得が可能で、個別銘柄指定・年度指定がない場合は一括取得を使う。
+        （全銘柄を1銘柄ずつ逐次取得すると銘柄数×sleep で Lambda が
+        タイムアウトするため、sync_prices と同型のバルク分岐に寄せる。）
+        コード指定・年度指定・バルク非対応プロバイダーの場合は従来の逐次取得。
+
+        lookback_days: バルク取得時に何日分の開示を対象にするか（None で既定）。
         """
+        if provider.supports_bulk_fetch() and not codes and fiscal_year is None:
+            return self._sync_bulk(provider, market_type, lookback_days)
         return self._sync_per_stock(provider, market_type, codes, fiscal_year)
 
     def _sync_bulk(
         self,
         provider: MarketDataProvider,
         market_type: str,
+        lookback_days: int | None = None,
     ) -> tuple[int, int, list[dict[str, str]]]:
         """全銘柄の財務データを一括取得。"""
         from apps.stocks.domain.entities import FinancialEntity
@@ -54,8 +68,9 @@ class FinancialSyncService:
 
         code_to_stock = {s.code: s for s in stocks}
 
+        days = lookback_days if lookback_days is not None else self._DEFAULT_BULK_LOOKBACK_DAYS
         to_date = date.today()
-        from_date = to_date - timedelta(days=60)  # 60日以内の開示データを一括取得
+        from_date = to_date - timedelta(days=days)  # 直近の開示データを一括取得
 
         try:
             all_financials = provider.fetch_all_financials(from_date, to_date)
