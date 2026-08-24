@@ -31,13 +31,22 @@ const PERIODS = [
   { value: "all", label: "全期間" },
 ] as const;
 
-export default function PortfolioHistoryChart() {
+type Props = {
+  /** 選択中のメンバー。"all" のときは合計＋全メンバーを表示 */
+  selectedMemberId?: number | "all";
+};
+
+export default function PortfolioHistoryChart({ selectedMemberId = "all" }: Props) {
   const [period, setPeriod] = useState("1y");
   const { data, isLoading } = usePortfolioHistory(period);
 
   if (isLoading) return <LoadingSpinner />;
   if (!data || data.history.length === 0) return null;
 
+  const focusedMember =
+    selectedMemberId !== "all"
+      ? data.members.find((m) => m.id === selectedMemberId)
+      : undefined;
   const showMembers = data.members.length > 1;
 
   // Recharts 用データ整形
@@ -53,6 +62,28 @@ export default function PortfolioHistoryChart() {
     }
     return row;
   });
+
+  // フォーカス中のメンバーがいればその 1 本だけを描画し、Y 軸をそのレンジに合わせる
+  const lines = focusedMember
+    ? [
+        {
+          key: `member_${focusedMember.id}`,
+          dataKey: `member_${focusedMember.id}`,
+          name: focusedMember.name,
+          color: focusedMember.color_code,
+          width: 2,
+        },
+      ]
+    : [
+        { key: "total", dataKey: "total", name: "合計", color: "#616161", width: 2 },
+        ...data.members.map((member) => ({
+          key: `member_${member.id}`,
+          dataKey: `member_${member.id}`,
+          name: member.name,
+          color: member.color_code,
+          width: 1.5,
+        })),
+      ];
 
   const formatYAxis = (value: number) => {
     if (value >= 100_000_000) return `${(value / 100_000_000).toFixed(1)}億`;
@@ -96,28 +127,21 @@ export default function PortfolioHistoryChart() {
                   tick={{ fontSize: 11 }}
                   tickFormatter={formatYAxis}
                   width={60}
+                  domain={["auto", "auto"]}
                 />
                 <Tooltip
                   formatter={formatTooltipValue}
                   labelFormatter={formatLabel}
                 />
                 <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="total"
-                  name="合計"
-                  stroke="#616161"
-                  strokeWidth={2}
-                  dot={false}
-                />
-                {data.members.map((member) => (
+                {lines.map((line) => (
                   <Line
-                    key={member.id}
+                    key={line.key}
                     type="monotone"
-                    dataKey={`member_${member.id}`}
-                    name={member.name}
-                    stroke={member.color_code}
-                    strokeWidth={1.5}
+                    dataKey={line.dataKey}
+                    name={line.name}
+                    stroke={line.color}
+                    strokeWidth={line.width}
                     dot={false}
                   />
                 ))}

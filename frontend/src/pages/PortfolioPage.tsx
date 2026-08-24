@@ -256,7 +256,7 @@ function DashboardTab() {
       )}
 
       {/* 資産推移グラフ */}
-      <PortfolioHistoryChart />
+      <PortfolioHistoryChart selectedMemberId={selectedMemberId} />
 
       {/* グラフ + 口座リスト */}
       <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
