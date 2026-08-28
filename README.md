@@ -15,15 +15,12 @@ ROE・成長率・資本コストを入力すると、ゴードン成長モデ�
 
 > 本リポジトリは非公開の開発リポジトリから、リリース時点のスナップショットを公開しているミラーです（コミット履歴はリリース単位）。
 
-<!-- スクリーンショット（プライバシー厳守）:
-     ・自分の保有銘柄・資産額が写る画面（ポートフォリオ/家族総資産）は絶対に載せない。
-     ・載せてよいのは上場銘柄の公開情報だけを映す画面:
-        - 銘柄詳細（適正株価・評価根拠・財務） … メインの1枚に最適
-        - ダッシュボード（おすすめ銘柄・算出結果）
-        - 株価チャート＋テクニカル指標
-     撮ったら docs/images/ に置いて下の行を有効化する。 -->
-<!-- ![FVC — 銘柄詳細（適正株価と評価根拠）](docs/images/screenshot-stock-detail.png) -->
-<!-- ![FVC — ダッシュボード](docs/images/screenshot-dashboard.png) -->
+![FVC — 銘柄詳細（適正株価・評価根拠・スクリーニング指標）](docs/images/screenshot-stock-detail.png)
+
+<p>
+  <img alt="ダッシュボード" src="docs/images/screenshot-dashboard.png" width="49%">
+  <img alt="株価チャートとテクニカル指標" src="docs/images/screenshot-chart.png" width="49%">
+</p>
 
 ## なぜ作ったか
 
