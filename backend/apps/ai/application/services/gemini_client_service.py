@@ -22,6 +22,13 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 _MAX_RETRIES = 2
 _BASE_DELAY = 3  # seconds
 
+# 個別株 AI 分析の出力設定。
+# gemini-2.5-flash は thinkingBudget 未指定だと dynamic thinking (-1) で動き、
+# 思考トークンが出力枠を圧迫して本文が途中で切れる事象があったため、予算を明示的に固定する。
+# 有効範囲は 0〜24576。0 で thinking 無効。
+_THINKING_BUDGET = 1024
+_MAX_OUTPUT_TOKENS = 8192
+
 
 @dataclass
 class GeminiResponse:
@@ -135,8 +142,10 @@ class GeminiClientService(AbstractLlmClient):
             "systemInstruction": {"parts": [{"text": system_prompt}]},
             "generationConfig": {
                 "temperature": 0.7,
-                # 回答は system prompt で 3000 文字以内に指示済み。生成時間短縮のため上限を絞る
-                "maxOutputTokens": 4096,
+                # 回答は system prompt で 3000 文字以内に指示済み。
+                # thinking の消費分を見込んで本文が切れないよう枠を確保する。
+                "maxOutputTokens": _MAX_OUTPUT_TOKENS,
+                "thinkingConfig": {"thinkingBudget": _THINKING_BUDGET},
             },
         }
 
@@ -166,6 +175,7 @@ class GeminiClientService(AbstractLlmClient):
         raise RuntimeError("Gemini API呼び出しに失敗しました")  # unreachable
 
     def _do_request(self, url: str, payload: dict) -> GeminiResponse:  # type: ignore[type-arg]
+        started = time.monotonic()
         try:
             with httpx.Client(timeout=self._TIMEOUT) as client:
                 resp = client.post(url, json=payload)
@@ -192,8 +202,37 @@ class GeminiClientService(AbstractLlmClient):
             if not candidates:
                 raise RuntimeError("Gemini APIから応答がありませんでした")
 
-            content = candidates[0]["content"]["parts"][0]["text"]
+            # thinking 有効時は parts が複数に分かれることがあるため全 text を連結する
+            # (parts[0] 決め打ちだと本文の先頭断片しか取れない)
+            parts = candidates[0].get("content", {}).get("parts", [])
+            content = "".join(p["text"] for p in parts if "text" in p)
+
             usage = data.get("usageMetadata", {})
+            thoughts_tokens = usage.get("thoughtsTokenCount", 0)
+            elapsed = time.monotonic() - started
+
+            finish_reason = candidates[0].get("finishReason")
+            if finish_reason == "MAX_TOKENS":
+                logger.warning(
+                    "Gemini 応答が maxOutputTokens(%d) で打ち切られました (thinking=%d, completion=%d, %.1fs)",
+                    _MAX_OUTPUT_TOKENS,
+                    thoughts_tokens,
+                    usage.get("candidatesTokenCount", 0),
+                    elapsed,
+                )
+            if not content:
+                raise RuntimeError("Gemini APIから本文が返りませんでした")
+
+            logger.info(
+                "Gemini 応答: %.1fs prompt=%d thinking=%d completion=%d chars=%d finish=%s",
+                elapsed,
+                usage.get("promptTokenCount", 0),
+                thoughts_tokens,
+                usage.get("candidatesTokenCount", 0),
+                len(content),
+                finish_reason,
+            )
+
             return GeminiResponse(
                 content=content,
                 model=self._model,
