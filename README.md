@@ -1,8 +1,33 @@
 # FVC — Fair Value Calculator
 
-**ゴードン成長モデル（残余利益モデル）** に基づき、株式の理論PBR・適正株価を算出し、現在株価との比較で割安・割高の判断材料を提供する個人投資家向けWebアプリケーションです。
+**「この株は、理論的に割安か？」を数式で答えるWebアプリ。**
 
-> 本リポジトリは非公開の開発リポジトリからリリース時点のスナップショットを公開しているミラーです（コミット履歴はリリース単位）。
+ROE・成長率・資本コストを入力すると、ゴードン成長モデル（残余利益モデル）で**理論PBR・適正株価**を算出し、現在株価と並べて「割安〜危険域」の6段階で評価します。さらに、現在のPBRから**市場が織り込んでいる期待成長率を逆算**したり、成長率別の適正株価レンジを一覧化したりと、"感覚"ではなく"根拠"で銘柄を見るための道具です。
+
+<p>
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white">
+  <img alt="Django" src="https://img.shields.io/badge/Django-6.0-092E20?logo=django&logoColor=white">
+  <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white">
+  <img alt="Terraform" src="https://img.shields.io/badge/Terraform-AWS-844FBA?logo=terraform&logoColor=white">
+  <img alt="License" src="https://img.shields.io/badge/License-MIT-green">
+</p>
+
+> 本リポジトリは非公開の開発リポジトリから、リリース時点のスナップショットを公開しているミラーです（コミット履歴はリリース単位）。
+
+<!-- スクリーンショット（プライバシー厳守）:
+     ・自分の保有銘柄・資産額が写る画面（ポートフォリオ/家族総資産）は絶対に載せない。
+     ・載せてよいのは上場銘柄の公開情報だけを映す画面:
+        - 銘柄詳細（適正株価・評価根拠・財務） … メインの1枚に最適
+        - ダッシュボード（おすすめ銘柄・算出結果）
+        - 株価チャート＋テクニカル指標
+     撮ったら docs/images/ に置いて下の行を有効化する。 -->
+<!-- ![FVC — 銘柄詳細（適正株価と評価根拠）](docs/images/screenshot-stock-detail.png) -->
+<!-- ![FVC — ダッシュボード](docs/images/screenshot-dashboard.png) -->
+
+## なぜ作ったか
+
+株価が「割安か割高か」の判断は、多くの場合PERやPBRを"なんとなく"眺めて終わりがちです。FVCは、**残余利益モデルという1本の理論**を軸に、入力（ROE・成長率・資本コスト）から出力（適正株価）までを一貫した数式で貫くことで、判断の根拠を明示できるようにしました。「なぜその株価が適正なのか」を、感覚ではなくモデルで説明できるのが狙いです。
 
 ## 主な機能
 
@@ -16,13 +41,15 @@
 | 米国基準比較 | 米国市場基準のPBRと比較しバブル領域を警告 |
 | ポートフォリオ管理 | 保有銘柄の評価・スナップショット・ダッシュボード |
 | テクニカル指標 | 移動平均等の指標表示とスクリーニング |
-| MCP サーバー | AIエージェント（Claude 等）から対話的に利用できる MCP ツール群 |
+| MCP サーバー | AIエージェント（Claude 等）から対話的に呼び出せる MCP ツール群 |
 
 理論モデルの詳細は [docs/design/app-specification.md](docs/design/app-specification.md) を参照してください。
 
-## アーキテクチャ
+## 技術的な見どころ
 
-**Clean Architecture + UseCase / Service 分離構成**（Django REST Framework + React のモノレポ）。
+- **Clean Architecture を Django に持ち込む** — View → UseCase → Service → Repository の一方向依存を徹底し、Domain 層は Django ORM/DRF を一切 import しない。依存解決は DIコンテナ（`config/container.py`）に集約。
+- **AIエージェントから使える MCP サーバー** — Claude 等の AIエージェントが、株価評価やポートフォリオ分析を対話的に呼び出せる MCP ツールを同梱。
+- **サーバーレス本番構成を Terraform で** — CloudFront + S3（SPA）／API Gateway + Lambda（Django on Mangum）／RDS を IaC で完全管理。株価は EventBridge Scheduler で平日定期同期。
 
 ```
 HTTP Request
@@ -46,24 +73,26 @@ HTTP Request
 
 | カテゴリ | 技術 |
 |---------|------|
-| バックエンド | Python / Django / Django REST Framework |
-| フロントエンド | React (TypeScript) / Vite |
+| バックエンド | Python 3.14 / Django 6.0 / Django REST Framework |
+| フロントエンド | React 19 (TypeScript) / Vite / TanStack Query / Zustand |
 | DB | MySQL 8.0 |
 | コンテナ | Docker / Docker Compose |
-| IaC | Terraform（AWS: Lambda / API Gateway / CloudFront / RDS ほか） |
+| IaC | Terraform（AWS: Lambda / API Gateway / CloudFront / RDS / EventBridge ほか） |
 | 認証 | Amazon Cognito (OAuth) |
-| CI/CD | GitHub Actions |
+| CI/CD | GitHub Actions（lint / test / type-check → 自動デプロイ） |
 
-## ローカルでの起動
+## クイックスタート
 
 ```bash
 cp .env.example .env   # 必要な値を設定
-make up                # コンテナ起動（backend / frontend / db / phpmyadmin）
+make up                # コンテナ起動（backend / frontend / db / phpmyadmin / swagger）
 make migrate           # マイグレーション
+make seed              # 初期データ投入（管理ユーザーの認証情報はコマンド実行時に表示されます）
 ```
 
 - フロントエンド: http://localhost:3000
 - API: http://localhost:18000
+- Swagger UI: http://localhost:18081
 - その他のコマンドは `make help` を参照
 
 ## データソースについて
