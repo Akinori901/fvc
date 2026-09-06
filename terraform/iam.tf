@@ -77,8 +77,8 @@ resource "aws_iam_role_policy" "lambda_ssm_read" {
 # AdminDeleteUser を定義していたが、**アプリのコードから一度も呼ばれて
 # いなかった**（boto3 の cognito-idp クライアント自体が存在しない）。
 #
-# 認証は qol-user-pool に統合し、ユーザーの作成・無効化・招待の再送は
-# 認証コンソール（qol-auth-console）が行う。FVC 側は JWT を検証するだけで、
+# 認証は cognito-auth-service に統合し、ユーザーの作成・無効化・招待の再送は
+# 認証コンソール（auth-console）が行う。FVC 側は JWT を検証するだけで、
 # プールを書き換える必要がない。
 #
 # 使わない権限を残すと、万一 Lambda が乗っ取られたときに
