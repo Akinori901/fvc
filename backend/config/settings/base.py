@@ -172,7 +172,7 @@ COGNITO_JWT_ISSUER = (
 # JWKS URL (公開鍵取得用)
 COGNITO_JWKS_URL = f"{COGNITO_JWT_ISSUER}/.well-known/jwks.json" if COGNITO_USER_POOL_ID else ""
 
-# --- 共通認証基盤（qol-auth-console）---
+# --- 共通認証基盤（auth-console）---
 # ロールを認証コンソールの画面で管理するための問い合わせ先。
 # **空なら中央を使わず、従来どおり Django の is_superuser だけで判定する。**
 # 移行中は「中央 OR is_superuser」のどちらかで許可される（締め出し防止）。

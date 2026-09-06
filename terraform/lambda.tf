@@ -34,18 +34,18 @@ resource "aws_lambda_function" "api" {
       OPENAI_ADMIN_KEY_SSM_PARAMETER = aws_ssm_parameter.openai_admin_api_key.name
       # Cognito (認証)
       #
-      # 認証は qol-user-pool（共通基盤）に統合済み。このリポジトリの
+      # 認証は cognito-auth-service（共通基盤）に統合済み。このリポジトリの
       # cognito.tf が作る fvc-user-pool はもう使っていない。
       #
-      # 値をハードコードせず変数にしているのは、qol-user-pool が別リポジトリ
-      # （QOL/qol-user-pool）の管理下にあり、ここから参照できないため。
+      # 値をハードコードせず変数にしているのは、cognito-auth-service が別リポジトリ
+      # （Akinori901/cognito-auth-service）の管理下にあり、ここから参照できないため。
       # 値は `terraform output` で取得して tfvars に入れる。
       COGNITO_USER_POOL_ID  = var.cognito_user_pool_id
       COGNITO_REGION        = var.aws_region
       COGNITO_WEB_CLIENT_ID = var.cognito_web_client_id
       COGNITO_GPT_CLIENT_ID = var.cognito_gpt_client_id
       COGNITO_DOMAIN_PREFIX = var.cognito_domain_prefix
-      # 共通認証基盤（qol-auth-console）。管理者ロールを画面で管理するために使う。
+      # 共通認証基盤（auth-console）。管理者ロールを画面で管理するために使う。
       # **中央 OR 既存の is_superuser のどちらかで許可**する作りなので、
       # 中央が落ちても管理画面から締め出されない（apps/core/permissions.py）。
       CENTRAL_AUTHZ_URL = var.central_authz_url

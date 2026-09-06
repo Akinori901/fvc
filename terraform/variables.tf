@@ -84,7 +84,7 @@ variable "app_login_url" {
 
 variable "central_authz_url" {
   description = <<-EOT
-    共通認証基盤（qol-auth-console）の URL。
+    共通認証基盤（auth-console）の URL。
 
     空なら中央を使わず、従来どおり Django の is_superuser だけで
     管理者判定する。公開版や検証環境ではこのままでよい。
@@ -122,14 +122,14 @@ variable "enable_optional_schedules" {
 }
 
 # -----------------------------------------------------------------------------
-# Cognito（qol-user-pool に統合済み）
+# Cognito（cognito-auth-service に統合済み）
 # -----------------------------------------------------------------------------
 #
-# 値は QOL/qol-user-pool リポジトリの `terraform output` から取得する:
+# 値は Akinori901/cognito-auth-service リポジトリの `terraform output` から取得する:
 #   user_pool_id / fvc_web_client_id / fvc_gpt_client_id / domain_prefix
 
 variable "cognito_user_pool_id" {
-  description = "認証に使う Cognito User Pool ID（qol-user-pool）"
+  description = "認証に使う Cognito User Pool ID（cognito-auth-service）"
   type        = string
   default     = ""
 }
