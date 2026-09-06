@@ -172,6 +172,17 @@ COGNITO_JWT_ISSUER = (
 # JWKS URL (公開鍵取得用)
 COGNITO_JWKS_URL = f"{COGNITO_JWT_ISSUER}/.well-known/jwks.json" if COGNITO_USER_POOL_ID else ""
 
+# --- 共通認証基盤（qol-auth-console）---
+# ロールを認証コンソールの画面で管理するための問い合わせ先。
+# **空なら中央を使わず、従来どおり Django の is_superuser だけで判定する。**
+# 移行中は「中央 OR is_superuser」のどちらかで許可される（締め出し防止）。
+
+CENTRAL_AUTHZ_URL = env("CENTRAL_AUTHZ_URL", default="")
+# 権限判定は API のたびに走るため、結果をキャッシュする。
+# 権限変更の反映が最大この秒数だけ遅れるが、開放が遅れる方向なので許容する。
+CENTRAL_AUTHZ_CACHE_TTL = env.int("CENTRAL_AUTHZ_CACHE_TTL", default=60)
+CENTRAL_AUTHZ_TIMEOUT = env.float("CENTRAL_AUTHZ_TIMEOUT", default=3.0)
+
 # --- CORS ---
 # 開発環境・本番環境で個別に設定
 

@@ -942,12 +942,19 @@ class DjangoScreeningPresetRepository(ScreeningPresetRepository):
 
     def save(self, entity: ScreeningPresetEntity) -> ScreeningPresetEntity:
         if entity.id:
-            ScreeningPreset.objects.filter(pk=entity.id, user_id=entity.user_id).update(
+            updated = ScreeningPreset.objects.filter(pk=entity.id, user_id=entity.user_id).update(
                 name=entity.name,
                 priority=entity.priority,
                 filters=entity.filters,
             )
-            obj = ScreeningPreset.objects.get(pk=entity.id)
+            if not updated:
+                # 他人の preset id を指定された場合ここに来る。
+                # 続けて get(pk=...) すると、更新はされないのに
+                # **他人の name / filters がレスポンスとして返る**。
+                msg = "プリセットが見つかりません"
+                raise ScreeningPreset.DoesNotExist(msg)
+            # user_id を条件に含める。上の update と同じ行だけを読む。
+            obj = ScreeningPreset.objects.get(pk=entity.id, user_id=entity.user_id)
         else:
             obj = ScreeningPreset.objects.create(
                 user_id=entity.user_id,

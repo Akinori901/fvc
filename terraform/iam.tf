@@ -71,28 +71,18 @@ resource "aws_iam_role_policy" "lambda_ssm_read" {
 }
 
 # Cognito User Pool 管理 API 読取権限 (Admin 管理画面で list_users を叩く)
-resource "aws_iam_role_policy" "lambda_cognito_admin" {
-  name = "${var.project_name}-lambda-cognito-admin"
-  role = aws_iam_role.lambda_execution.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "CognitoAdminReadWrite"
-        Effect = "Allow"
-        Action = [
-          "cognito-idp:ListUsers",
-          "cognito-idp:AdminGetUser",
-          "cognito-idp:AdminDisableUser",
-          "cognito-idp:AdminEnableUser",
-          "cognito-idp:AdminDeleteUser",
-        ]
-        Resource = aws_cognito_user_pool.main.arn
-      },
-    ]
-  })
-}
+# Cognito のユーザー管理権限は持たせない。
+#
+# 以前は ListUsers / AdminGetUser / AdminDisableUser / AdminEnableUser /
+# AdminDeleteUser を定義していたが、**アプリのコードから一度も呼ばれて
+# いなかった**（boto3 の cognito-idp クライアント自体が存在しない）。
+#
+# 認証は qol-user-pool に統合し、ユーザーの作成・無効化・招待の再送は
+# 認証コンソール（qol-auth-console）が行う。FVC 側は JWT を検証するだけで、
+# プールを書き換える必要がない。
+#
+# 使わない権限を残すと、万一 Lambda が乗っ取られたときに
+# ユーザーを消される。定義ごと削除して権限を絞る。
 
 # -----------------------------------------------------------------------------
 # GitHub Actions デプロイ用 IAM ユーザー

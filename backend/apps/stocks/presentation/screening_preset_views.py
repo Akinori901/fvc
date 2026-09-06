@@ -69,6 +69,13 @@ class ScreeningPresetDetailView(APIView):
         priority = int(request.data.get("priority", 0))
         filters = request.data.get("filters", {})
 
+        # 他人の preset id を弾く。ここを通さないと、更新はされないのに
+        # 相手の name / filters がレスポンスとして返ってしまう。
+        # portfolios の PUT と同じ作りに揃えている。
+        repo = container.screening_preset_repository()
+        if not repo.find_by_id(pk, cast("int", request.user.id)):
+            return Response({"detail": "見つかりません"}, status=status.HTTP_404_NOT_FOUND)
+
         usecase = container.save_screening_preset_usecase()
         preset = usecase.execute(
             user_id=cast("int", request.user.id),

@@ -71,8 +71,9 @@ frontend/.vite/
 
 # Terraform
 terraform/.terraform/
-terraform/*.tfstate
-terraform/*.tfstate.backup
+# tfstate は DB パスワード等を平文で含む。世代付きバックアップ
+# （terraform.tfstate.1786843522.backup）も拾えるよう * を前後に置く。
+terraform/*.tfstate*
 terraform/*.tfvars
 terraform/.terraform.lock.hcl
 
