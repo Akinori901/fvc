@@ -125,7 +125,7 @@ resource "aws_scheduler_schedule" "sync_prices_morning" {
     }
   }
 
-  state = "ENABLED"
+  state = var.enable_optional_schedules ? "ENABLED" : "DISABLED"
 }
 
 # -----------------------------------------------------------------------------
@@ -196,7 +196,7 @@ resource "aws_scheduler_schedule" "sync_margin_weekly" {
     }
   }
 
-  state = "ENABLED"
+  state = var.enable_optional_schedules ? "ENABLED" : "DISABLED"
 }
 
 # -----------------------------------------------------------------------------
@@ -231,7 +231,7 @@ resource "aws_scheduler_schedule" "sync_dividends_weekly" {
     }
   }
 
-  state = "ENABLED"
+  state = var.enable_optional_schedules ? "ENABLED" : "DISABLED"
 }
 
 # -----------------------------------------------------------------------------
@@ -267,7 +267,7 @@ resource "aws_scheduler_schedule" "sync_dividends_jp_stock_weekly" {
     }
   }
 
-  state = "ENABLED"
+  state = var.enable_optional_schedules ? "ENABLED" : "DISABLED"
 }
 
 # -----------------------------------------------------------------------------
@@ -302,7 +302,7 @@ resource "aws_scheduler_schedule" "sync_fx_data_daily" {
     }
   }
 
-  state = "ENABLED"
+  state = var.enable_optional_schedules ? "ENABLED" : "DISABLED"
 }
 
 # -----------------------------------------------------------------------------
@@ -336,7 +336,7 @@ resource "aws_scheduler_schedule" "sync_fx_data_full_weekly" {
     }
   }
 
-  state = "ENABLED"
+  state = var.enable_optional_schedules ? "ENABLED" : "DISABLED"
 }
 
 # =============================================================================
@@ -446,7 +446,7 @@ resource "aws_scheduler_schedule" "sync_dividends_us_weekly" {
     }
   }
 
-  state = "ENABLED"
+  state = var.enable_optional_schedules ? "ENABLED" : "DISABLED"
 }
 
 # -----------------------------------------------------------------------------
@@ -482,7 +482,7 @@ resource "aws_scheduler_schedule" "sync_news_stocks_evening" {
     }
   }
 
-  state = "ENABLED"
+  state = var.enable_optional_schedules ? "ENABLED" : "DISABLED"
 }
 
 # -----------------------------------------------------------------------------
@@ -519,7 +519,7 @@ resource "aws_scheduler_schedule" "compute_movers_evening" {
     }
   }
 
-  state = "ENABLED"
+  state = var.enable_optional_schedules ? "ENABLED" : "DISABLED"
 }
 
 # =============================================================================

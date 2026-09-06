@@ -58,6 +58,27 @@ resource "aws_security_group" "rds" {
     description     = "MySQL from Lambda only"
   }
 
+  # この RDS は task-scope など他の個人ツールと共有している。
+  #
+  # **この 1 本を消すと task-scope の本番が DB に繋がらなくなる。**
+  # 手で追加されていて tf に無かったため、plan のたびに削除差分として
+  # 現れていた（apply すれば即障害になる状態だった）。
+  #
+  # shared-lambda-sg は fair-value-calculator の管理外なので、
+  # ID を変数で受け取る。空なら追加しない（公開版・検証環境向け）。
+  dynamic "ingress" {
+    for_each = var.shared_lambda_security_group_id != "" ? [1] : []
+    content {
+      from_port       = 3306
+      to_port         = 3306
+      protocol        = "tcp"
+      security_groups = [var.shared_lambda_security_group_id]
+      # 実物の description が空のため合わせる。文字列を入れると
+      # plan に毎回差分が出る（意味は上のコメントで担保する）。
+      description = ""
+    }
+  }
+
   egress {
     from_port   = 0
     to_port     = 0

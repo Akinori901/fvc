@@ -69,7 +69,7 @@ class TestJitProvisionService:
         """sub マッチがなくても、allowed_emails に登録された email なら既存 user に紐付ける。"""
         user_model = get_user_model()
         existing = user_model._default_manager.create(  # noqa: SLF001
-            username="akinori", email="akinori@example.com"
+            username="taro", email="akinori@example.com"
         )
         UserAllowedEmail.objects.create(user=existing, email="akinori@example.com")
 
@@ -106,13 +106,15 @@ class TestJitProvisionService:
         """
         user_model = get_user_model()
         existing = user_model._default_manager.create(  # noqa: SLF001
-            username="akinori", email="akinori@sfass.net"
+            username="taro", email="taro@example.net"
         )
-        UserAllowedEmail.objects.create(user=existing, email="akinori@sfass.net")
-        UserAllowedEmail.objects.create(user=existing, email="a.fukugi@gmail.com")
+        UserAllowedEmail.objects.create(user=existing, email="taro@example.net")
+        UserAllowedEmail.objects.create(user=existing, email="taro.personal@example.com")
 
         # Google で別 email ログイン
-        user = _make_service().provision(_make_claims(sub="google-sub", email="a.fukugi@gmail.com", provider="google"))
+        user = _make_service().provision(
+            _make_claims(sub="google-sub", email="taro.personal@example.com", provider="google")
+        )
 
         assert user.pk == existing.pk
         link = CognitoLink.objects.get(cognito_sub="google-sub")

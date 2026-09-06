@@ -35,10 +35,10 @@ class TestAdminUserQueryService:
             cognito_sub="alice-sub-1", user=user, provider="cognito", cognito_email="alice@example.com"
         )
         CognitoLink.objects.create(
-            cognito_sub="alice-sub-2", user=user, provider="google", cognito_email="a.alice@gmail.com"
+            cognito_sub="alice-sub-2", user=user, provider="google", cognito_email="alice.personal@example.com"
         )
         UserAllowedEmail.objects.create(user=user, email="alice@example.com")
-        UserAllowedEmail.objects.create(user=user, email="a.alice@gmail.com", label="個人 Google")
+        UserAllowedEmail.objects.create(user=user, email="alice.personal@example.com", label="個人 Google")
 
         rows = _make_service().list_users_with_details()
 
@@ -46,7 +46,7 @@ class TestAdminUserQueryService:
         assert {link.cognito_sub for link in match.cognito_links} == {"alice-sub-1", "alice-sub-2"}
         assert {allowed.email for allowed in match.allowed_emails} == {
             "alice@example.com",
-            "a.alice@gmail.com",
+            "alice.personal@example.com",
         }
         assert any(allowed.label == "個人 Google" for allowed in match.allowed_emails)
 

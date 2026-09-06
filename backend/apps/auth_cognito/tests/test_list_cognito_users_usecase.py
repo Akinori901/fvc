@@ -109,7 +109,7 @@ class TestListCognitoUsersUseCase:
         """
         user_model = get_user_model()
         user = user_model._default_manager.create(  # noqa: SLF001
-            username="akinori", email="akinori@example.com"
+            username="taro", email="akinori@example.com"
         )
         # JIT が link 作成する際の sub (UUID)
         link_sub = "11111111-2222-3333-4444-555555555555"
@@ -117,7 +117,7 @@ class TestListCognitoUsersUseCase:
             cognito_sub=link_sub,
             user=user,
             provider="google",
-            cognito_email="a.fukugi@gmail.com",
+            cognito_email="taro.personal@example.com",
         )
 
         now = datetime.now(tz=UTC)
@@ -126,7 +126,7 @@ class TestListCognitoUsersUseCase:
             CognitoUserInfo(
                 username="Google_105819244000000000000",
                 sub=link_sub,
-                email="a.fukugi@gmail.com",
+                email="taro.personal@example.com",
                 status="EXTERNAL_PROVIDER",
                 enabled=True,
                 user_create_date=now,
