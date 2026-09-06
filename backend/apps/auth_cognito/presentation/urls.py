@@ -11,18 +11,11 @@ from apps.auth_cognito.presentation.views.admin_allowed_email_view import (
 from apps.auth_cognito.presentation.views.admin_cognito_link_view import (
     AdminCognitoLinkDestroyView,
 )
-from apps.auth_cognito.presentation.views.admin_cognito_user_view import (
-    AdminCognitoUserDestroyView,
-    AdminCognitoUserDisableView,
-    AdminCognitoUserEnableView,
-    AdminCognitoUserListView,
-)
 from apps.auth_cognito.presentation.views.admin_user_view import (
     AdminUserDestroyView,
     AdminUserDisableView,
     AdminUserEnableView,
     AdminUserListCreateView,
-    AdminUserResendInviteView,
 )
 
 urlpatterns = [
@@ -43,11 +36,6 @@ urlpatterns = [
         name="admin-user-enable",
     ),
     path(
-        "admin/users/<int:user_id>/resend-invite/",
-        AdminUserResendInviteView.as_view(),
-        name="admin-user-resend-invite",
-    ),
-    path(
         "admin/users/<int:user_id>/allowed-emails/",
         AdminAllowedEmailCreateView.as_view(),
         name="admin-allowed-email-create",
@@ -61,25 +49,5 @@ urlpatterns = [
         "admin/users/<int:user_id>/cognito-links/<int:link_id>/",
         AdminCognitoLinkDestroyView.as_view(),
         name="admin-cognito-link-destroy",
-    ),
-    path(
-        "admin/cognito-users/",
-        AdminCognitoUserListView.as_view(),
-        name="admin-cognito-users",
-    ),
-    path(
-        "admin/cognito-users/<str:username>/",
-        AdminCognitoUserDestroyView.as_view(),
-        name="admin-cognito-user-destroy",
-    ),
-    path(
-        "admin/cognito-users/<str:username>/disable/",
-        AdminCognitoUserDisableView.as_view(),
-        name="admin-cognito-user-disable",
-    ),
-    path(
-        "admin/cognito-users/<str:username>/enable/",
-        AdminCognitoUserEnableView.as_view(),
-        name="admin-cognito-user-enable",
     ),
 ]

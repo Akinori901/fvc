@@ -46,9 +46,6 @@ class AdminUserRow:
     last_login: datetime | None
     cognito_links: list[CognitoLinkInfo] = field(default_factory=list)
     allowed_emails: list[UserAllowedEmailInfo] = field(default_factory=list)
-    # 新規作成時のみ意味を持つ。Cognito 招待メール送信が成功したか
-    # (一覧 GET など、招待を伴わないコンテキストでは常に True で返す)。
-    invite_email_sent: bool = True
 
 
 @dataclass(frozen=True)
@@ -61,17 +58,3 @@ class AddAllowedEmailDTO:
     user_id: int
     email: str
     label: str = ""
-
-
-@dataclass(frozen=True)
-class CognitoUserRow:
-    """`/api/admin/cognito-users/` の 1 行分。"""
-
-    username: str
-    email: str
-    status: str
-    enabled: bool
-    user_create_date: datetime | None
-    user_last_modified_date: datetime | None
-    identity_provider: str
-    linked_user_id: int | None

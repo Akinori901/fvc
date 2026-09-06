@@ -1,6 +1,6 @@
 """Admin 管理 API シリアライザー。
 
-DTO (AdminUserRow / CognitoUserRow / CreateAdminUserDTO / AddAllowedEmailDTO 等)
+DTO (AdminUserRow / CreateAdminUserDTO / AddAllowedEmailDTO 等)
 を REST で受け渡すための入出力ラッパー。
 """
 
@@ -14,7 +14,6 @@ if TYPE_CHECKING:
     from apps.auth_cognito.application.dto import (
         AdminUserRow,
         CognitoLinkInfo,
-        CognitoUserRow,
         UserAllowedEmailInfo,
     )
 
@@ -44,7 +43,6 @@ class AdminUserRowSerializer(serializers.Serializer):  # type: ignore[type-arg]
     last_login = serializers.DateTimeField(allow_null=True)
     cognito_links = CognitoLinkInfoSerializer(many=True)
     allowed_emails = UserAllowedEmailInfoSerializer(many=True)
-    invite_email_sent = serializers.BooleanField()
 
     @classmethod
     def from_row(cls, row: AdminUserRow) -> dict[str, Any]:
@@ -59,7 +57,6 @@ class AdminUserRowSerializer(serializers.Serializer):  # type: ignore[type-arg]
             "last_login": row.last_login,
             "cognito_links": [_link_to_dict(link) for link in row.cognito_links],
             "allowed_emails": [_allowed_to_dict(allowed) for allowed in row.allowed_emails],
-            "invite_email_sent": row.invite_email_sent,
         }
 
 
@@ -72,30 +69,6 @@ class AddAllowedEmailSerializer(serializers.Serializer):  # type: ignore[type-ar
     label = serializers.CharField(  # type: ignore[assignment]
         max_length=100, required=False, allow_blank=True, default=""
     )
-
-
-class CognitoUserRowSerializer(serializers.Serializer):  # type: ignore[type-arg]
-    username = serializers.CharField()
-    email = serializers.CharField(allow_blank=True)
-    status = serializers.CharField(allow_blank=True)
-    enabled = serializers.BooleanField()
-    user_create_date = serializers.DateTimeField(allow_null=True)
-    user_last_modified_date = serializers.DateTimeField(allow_null=True)
-    identity_provider = serializers.CharField()
-    linked_user_id = serializers.IntegerField(allow_null=True)
-
-    @classmethod
-    def from_row(cls, row: CognitoUserRow) -> dict[str, Any]:
-        return {
-            "username": row.username,
-            "email": row.email,
-            "status": row.status,
-            "enabled": row.enabled,
-            "user_create_date": row.user_create_date,
-            "user_last_modified_date": row.user_last_modified_date,
-            "identity_provider": row.identity_provider,
-            "linked_user_id": row.linked_user_id,
-        }
 
 
 def _link_to_dict(link: CognitoLinkInfo) -> dict[str, Any]:

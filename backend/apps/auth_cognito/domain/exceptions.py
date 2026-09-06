@@ -24,11 +24,3 @@ class UserNotAllowedError(CognitoAuthError):
     DRF Authentication Class で `AuthenticationFailed` に変換される (401)。
     管理者が事前に `auth_user` を作成しないと利用できない運用を担保する。
     """
-
-
-class CognitoUserAlreadyExistsError(CognitoAuthError):
-    """`admin_create_user` で既に同 username の Cognito ユーザーがいた。"""
-
-    def __init__(self, email: str) -> None:
-        super().__init__(f"Cognito user already exists for {email}")
-        self.email = email

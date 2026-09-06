@@ -7,7 +7,6 @@ import apiClient from "./client";
 import type {
   AdminUserListResponse,
   AdminUserRow,
-  CognitoUserListResponse,
   UserAllowedEmailInfo,
 } from "@/types/admin";
 
@@ -29,26 +28,11 @@ export const adminApi = {
   deleteCognitoLink: (userId: number, linkId: number) =>
     apiClient.delete(`/admin/users/${userId}/cognito-links/${linkId}/`),
 
-  listCognitoUsers: () =>
-    apiClient.get<CognitoUserListResponse>("/admin/cognito-users/"),
-
   disableUser: (userId: number) =>
     apiClient.post(`/admin/users/${userId}/disable/`),
 
   enableUser: (userId: number) =>
     apiClient.post(`/admin/users/${userId}/enable/`),
 
-  resendInvite: (userId: number) =>
-    apiClient.post(`/admin/users/${userId}/resend-invite/`),
-
   deleteUser: (userId: number) => apiClient.delete(`/admin/users/${userId}/`),
-
-  disableCognitoUser: (username: string) =>
-    apiClient.post(`/admin/cognito-users/${encodeURIComponent(username)}/disable/`),
-
-  enableCognitoUser: (username: string) =>
-    apiClient.post(`/admin/cognito-users/${encodeURIComponent(username)}/enable/`),
-
-  deleteCognitoUser: (username: string) =>
-    apiClient.delete(`/admin/cognito-users/${encodeURIComponent(username)}/`),
 };
