@@ -28,17 +28,11 @@ if TYPE_CHECKING:
     from apps.auth_cognito.application.services.allowed_email_service import (
         AllowedEmailService,
     )
-    from apps.auth_cognito.application.services.cognito_invite_service import (
-        CognitoInviteService,
-    )
     from apps.auth_cognito.application.services.cognito_jwt_verifier_service import (
         CognitoJwtVerifierService,
     )
     from apps.auth_cognito.application.services.cognito_link_admin_service import (
         CognitoLinkAdminService,
-    )
-    from apps.auth_cognito.application.services.cognito_user_pool_admin_service import (
-        CognitoUserPoolAdminService,
     )
     from apps.auth_cognito.application.services.jit_provision_service import (
         JitProvisionService,
@@ -58,35 +52,17 @@ if TYPE_CHECKING:
     from apps.auth_cognito.application.usecases.delete_cognito_link_usecase import (
         DeleteCognitoLinkUseCase,
     )
-    from apps.auth_cognito.application.usecases.delete_cognito_user_usecase import (
-        DeleteCognitoUserUseCase,
-    )
     from apps.auth_cognito.application.usecases.disable_admin_user_usecase import (
         DisableAdminUserUseCase,
-    )
-    from apps.auth_cognito.application.usecases.disable_cognito_user_usecase import (
-        DisableCognitoUserUseCase,
     )
     from apps.auth_cognito.application.usecases.enable_admin_user_usecase import (
         EnableAdminUserUseCase,
     )
-    from apps.auth_cognito.application.usecases.enable_cognito_user_usecase import (
-        EnableCognitoUserUseCase,
-    )
     from apps.auth_cognito.application.usecases.list_admin_users_usecase import (
         ListAdminUsersUseCase,
     )
-    from apps.auth_cognito.application.usecases.list_cognito_users_usecase import (
-        ListCognitoUsersUseCase,
-    )
     from apps.auth_cognito.application.usecases.remove_allowed_email_usecase import (
         RemoveAllowedEmailUseCase,
-    )
-    from apps.auth_cognito.application.usecases.resend_invite_usecase import (
-        ResendInviteUseCase,
-    )
-    from apps.auth_cognito.infrastructure.repositories.boto3_cognito_userpool_repository import (
-        Boto3CognitoUserPoolRepository,
     )
     from apps.auth_cognito.infrastructure.repositories.django_cognito_repositories import (
         DjangoCognitoLinkRepository,
@@ -1389,26 +1365,6 @@ def jit_provision_service() -> JitProvisionService:
     )
 
 
-def cognito_userpool_repository() -> Boto3CognitoUserPoolRepository:
-    import boto3
-    from django.conf import settings
-
-    from apps.auth_cognito.infrastructure.repositories.boto3_cognito_userpool_repository import (
-        Boto3CognitoUserPoolRepository,
-    )
-
-    client = boto3.client("cognito-idp", region_name=settings.COGNITO_REGION)
-    return Boto3CognitoUserPoolRepository(client=client, user_pool_id=settings.COGNITO_USER_POOL_ID)
-
-
-def cognito_invite_service() -> CognitoInviteService:
-    from apps.auth_cognito.application.services.cognito_invite_service import (
-        CognitoInviteService,
-    )
-
-    return CognitoInviteService(userpool_repo=cognito_userpool_repository())
-
-
 def admin_user_query_service() -> AdminUserQueryService:
     from apps.auth_cognito.application.services.admin_user_query_service import (
         AdminUserQueryService,
@@ -1452,17 +1408,6 @@ def admin_user_lifecycle_service() -> AdminUserLifecycleService:
     return AdminUserLifecycleService()
 
 
-def cognito_user_pool_admin_service() -> CognitoUserPoolAdminService:
-    from apps.auth_cognito.application.services.cognito_user_pool_admin_service import (
-        CognitoUserPoolAdminService,
-    )
-
-    return CognitoUserPoolAdminService(
-        userpool_repo=cognito_userpool_repository(),
-        link_repo=cognito_link_repository(),
-    )
-
-
 def list_admin_users_usecase() -> ListAdminUsersUseCase:
     from apps.auth_cognito.application.usecases.list_admin_users_usecase import (
         ListAdminUsersUseCase,
@@ -1479,16 +1424,6 @@ def create_admin_user_usecase() -> CreateAdminUserUseCase:
     return CreateAdminUserUseCase(
         admin_user_create_service=admin_user_create_service(),
         allowed_email_service=allowed_email_service(),
-        invite_service=cognito_invite_service(),
-    )
-
-
-def resend_invite_usecase() -> ResendInviteUseCase:
-    from apps.auth_cognito.application.usecases.resend_invite_usecase import ResendInviteUseCase
-
-    return ResendInviteUseCase(
-        invite_service=cognito_invite_service(),
-        userpool_repo=cognito_userpool_repository(),
     )
 
 
@@ -1516,17 +1451,6 @@ def delete_cognito_link_usecase() -> DeleteCognitoLinkUseCase:
     return DeleteCognitoLinkUseCase(cognito_link_admin_service=cognito_link_admin_service())
 
 
-def list_cognito_users_usecase() -> ListCognitoUsersUseCase:
-    from apps.auth_cognito.application.usecases.list_cognito_users_usecase import (
-        ListCognitoUsersUseCase,
-    )
-
-    return ListCognitoUsersUseCase(
-        cognito_userpool_repo=cognito_userpool_repository(),
-        cognito_link_repo=cognito_link_repository(),
-    )
-
-
 def disable_admin_user_usecase() -> DisableAdminUserUseCase:
     from apps.auth_cognito.application.usecases.disable_admin_user_usecase import (
         DisableAdminUserUseCase,
@@ -1549,27 +1473,3 @@ def delete_admin_user_usecase() -> DeleteAdminUserUseCase:
     )
 
     return DeleteAdminUserUseCase(lifecycle_service=admin_user_lifecycle_service())
-
-
-def disable_cognito_user_usecase() -> DisableCognitoUserUseCase:
-    from apps.auth_cognito.application.usecases.disable_cognito_user_usecase import (
-        DisableCognitoUserUseCase,
-    )
-
-    return DisableCognitoUserUseCase(service=cognito_user_pool_admin_service())
-
-
-def enable_cognito_user_usecase() -> EnableCognitoUserUseCase:
-    from apps.auth_cognito.application.usecases.enable_cognito_user_usecase import (
-        EnableCognitoUserUseCase,
-    )
-
-    return EnableCognitoUserUseCase(service=cognito_user_pool_admin_service())
-
-
-def delete_cognito_user_usecase() -> DeleteCognitoUserUseCase:
-    from apps.auth_cognito.application.usecases.delete_cognito_user_usecase import (
-        DeleteCognitoUserUseCase,
-    )
-
-    return DeleteCognitoUserUseCase(service=cognito_user_pool_admin_service())

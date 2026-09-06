@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from apps.auth_cognito.domain.entities import (
         CognitoLinkEntity,
-        CognitoUserInfo,
         UserAllowedEmailEntity,
     )
 
@@ -70,41 +69,3 @@ class UserAllowedEmailRepository(ABC):
     @abstractmethod
     def delete(self, allowed_id: int) -> None:
         """許可レコードを削除する。"""
-
-
-class CognitoUserPoolRepository(ABC):
-    """Cognito User Pool そのものへの問い合わせ境界 (管理操作用)。"""
-
-    @abstractmethod
-    def list_users(self) -> list[CognitoUserInfo]:
-        """User Pool のユーザー一覧を返す。"""
-
-    @abstractmethod
-    def get_user(self, username: str) -> CognitoUserInfo | None:
-        """指定 username のユーザー情報を取得する。存在しなければ None。"""
-
-    @abstractmethod
-    def disable_user(self, username: str) -> None:
-        """ユーザーを無効化する (admin_disable_user)。"""
-
-    @abstractmethod
-    def enable_user(self, username: str) -> None:
-        """ユーザーを有効化する (admin_enable_user)。"""
-
-    @abstractmethod
-    def delete_user(self, username: str) -> None:
-        """ユーザーを削除する (admin_delete_user)。"""
-
-    @abstractmethod
-    def admin_create_user(self, email: str) -> None:
-        """Cognito User Pool にユーザーを作成し、招待メール送信をトリガする。
-
-        `Username=email`、`UserAttributes` に `email` と `email_verified=true` を
-        セットする。`TemporaryPassword` は指定せず Cognito 自動生成に任せる。
-        `DesiredDeliveryMediums=["EMAIL"]`。
-        既存ユーザーの場合は `CognitoUserAlreadyExistsError` を raise する。
-        """
-
-    @abstractmethod
-    def resend_invite(self, email: str) -> None:
-        """既存(未確認)ユーザーへ招待メールを再送する (MessageAction=RESEND)。"""

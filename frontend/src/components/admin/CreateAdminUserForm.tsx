@@ -15,20 +15,12 @@ export default function CreateAdminUserForm() {
   const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [warning, setWarning] = useState<string | null>(null);
 
   const createMutation = useMutation({
     mutationFn: (e: string) => adminApi.createUser(e).then((r) => r.data),
-    onSuccess: (row) => {
+    onSuccess: () => {
       setEmail("");
       setError(null);
-      if (row.invite_email_sent === false) {
-        setWarning(
-          `ユーザー ${row.email} は作成されましたが、Cognito 招待メールの送信に失敗しました。`,
-        );
-      } else {
-        setWarning(null);
-      }
       queryClient.invalidateQueries({ queryKey: ["adminUsers"] });
     },
     onError: (err: unknown) => {
@@ -37,7 +29,6 @@ export default function CreateAdminUserForm() {
           ? String(err.response.data.detail)
           : "ユーザー作成に失敗しました";
       setError(message);
-      setWarning(null);
     },
   });
 
@@ -63,12 +54,6 @@ export default function CreateAdminUserForm() {
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
-        </Alert>
-      )}
-
-      {warning && (
-        <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setWarning(null)}>
-          {warning}
         </Alert>
       )}
 
