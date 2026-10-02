@@ -39,6 +39,43 @@ resource "aws_cloudfront_function" "basic_auth" {
   JS
 }
 
+# -----------------------------------------------------------------------------
+# OAuth: Google IdP 直行のためのクエリ注入
+#
+# Cognito Hosted UI は `identity_provider=Google` が付いていると「Continue with
+# Google」ボタンを挟まず Google の consent 画面へ直行する。この値を OpenAPI の
+# authorizationUrl に埋め込むと、OAuth クライアントが `?client_id=...` を連結した
+# 際に `?` が二重になり Cognito が `Required parameters missing` を返すため
+# (2026-09-07 の障害)、URL は素のまま公開し、ここで注入する。
+#
+# 対象は `/oauth2/authorize` のみ。`/oauth2/token` は POST のトークン交換であり
+# identity_provider は不要かつ有害なので触らない。
+# 既に identity_provider が指定されている場合 (Web 画面から email/password を
+# 選ぶ導線など) は上書きしない。
+# -----------------------------------------------------------------------------
+resource "aws_cloudfront_function" "oauth_idp_injection" {
+  name    = "${var.project_name}-oauth-idp-injection"
+  runtime = "cloudfront-js-2.0"
+  comment = "Inject identity_provider=Google into /oauth2/authorize (see header comment)"
+  publish = true
+  code    = <<-JS
+    function handler(event) {
+      var request = event.request;
+
+      if (request.uri !== "/oauth2/authorize") {
+        return request;
+      }
+
+      // 呼び出し元が明示的に IdP を指定している場合は尊重する
+      if (!request.querystring["identity_provider"]) {
+        request.querystring["identity_provider"] = { value: "Google" };
+      }
+
+      return request;
+    }
+  JS
+}
+
 # S3 用 Origin Access Control
 resource "aws_cloudfront_origin_access_control" "s3" {
   name                              = "${var.project_name}-s3-oac"
@@ -206,6 +243,9 @@ resource "aws_cloudfront_distribution" "main" {
   # Cognito の /oauth2/authorize, /oauth2/token を本 CloudFront 経由で公開する。
   # Host ヘッダーは forwarded_values.headers に含めないことで Cognito オリジンへの
   # 書き換えを CloudFront 任せにする（含めると Cognito 側で 400 になる）。
+  #
+  # viewer-request で identity_provider=Google を注入し、Google ログインへ直行させる
+  # (aws_cloudfront_function.oauth_idp_injection のコメント参照)。
   # ---------------------------------------------------------------------------
   ordered_cache_behavior {
     path_pattern     = "/oauth2/*"
@@ -219,6 +259,11 @@ resource "aws_cloudfront_distribution" "main" {
       cookies {
         forward = "all"
       }
+    }
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.oauth_idp_injection.arn
     }
 
     viewer_protocol_policy = "https-only"

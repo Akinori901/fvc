@@ -409,6 +409,11 @@ class DjangoFinancialRepository(FinancialRepository):
         return {sid: [self._to_entity(o) for o in objs] for sid, objs in raw.items()}
 
 
+# 株価行を iterator() で読むときのフェッチ単位。大きすぎると 1 回の取得で
+# メモリに載る行が増え、小さすぎると往復が増える。
+_PRICE_ROW_CHUNK_SIZE = 5000
+
+
 class DjangoPriceRepository(PriceRepository):
     """Django ORM による株価リポジトリ実装"""
 
@@ -508,26 +513,35 @@ class DjangoPriceRepository(PriceRepository):
             if row["high"] is not None and row["low"] is not None
         }
 
-    def find_all_recent_prices(self, limit: int = 25) -> dict[int, list[PriceEntity]]:
-        """全銘柄の直近N日の株価を一括取得（日付降順）。
+    def find_all_recent_prices(
+        self, limit: int = 25, stock_ids: Sequence[int] | None = None
+    ) -> dict[int, list[PriceEntity]]:
+        """直近N日の株価を一括取得（日付降順）。
 
         values() で軽量化し、ORM オブジェクト生成コストを削減。
         cutoff は「DB 上の最新日」起点で limit*2 日遡る（同期が止まっていても直近 N 件取れる）。
+        stock_ids 指定時はその銘柄に絞る（呼び出し側でのチャンク読み込み用）。
         """
         from datetime import timedelta
 
         from django.db.models import Max
 
+        if stock_ids is not None and not stock_ids:
+            return {}
+
         anchor = StockPrice.objects.aggregate(d=Max("date"))["d"] or date.today()
         cutoff = anchor - timedelta(days=limit * 2)
-        rows = (
-            StockPrice.objects.filter(date__gte=cutoff)
-            .order_by("stock_id", "-date")
-            .values("stock_id", "date", "close_price", "adj_factor", "volume", "is_limit_up", "is_limit_down")
+        queryset = StockPrice.objects.filter(date__gte=cutoff)
+        if stock_ids is not None:
+            queryset = queryset.filter(stock_id__in=stock_ids)
+        rows = queryset.order_by("stock_id", "-date").values(
+            "stock_id", "date", "close_price", "adj_factor", "volume", "is_limit_up", "is_limit_down"
         )
 
+        # iterator() で QuerySet のキャッシュを持たない。cutoff は limit*2 日分あり、
+        # limit を超えて捨てる行まで全件メモリに載せると銘柄数×日数で膨らむ。
         result: dict[int, list[PriceEntity]] = {}
-        for row in rows:
+        for row in rows.iterator(chunk_size=_PRICE_ROW_CHUNK_SIZE):
             sid = row["stock_id"]
             if sid not in result:
                 result[sid] = []

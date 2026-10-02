@@ -23,6 +23,8 @@ from apps.stocks.domain.technical_metrics import (
 from apps.valuations.domain.entities import MARKET_COST_OF_CAPITAL, FairValueCalculation
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator, Sequence
+
     from apps.stocks.domain.entities import DividendEntity, FinancialEntity, PriceEntity, StockEntity
     from apps.stocks.domain.repositories import (
         DividendRepository,
@@ -52,6 +54,16 @@ _RANGE_MAX_DRIFT_PCT = Decimal("0.15")  # ±15% 以内
 _RANGE_MAX_EPS_CAGR_PCT = Decimal("10")  # ±10% 以内（急成長/急減速ではない）
 
 _TOP_N = 5
+
+# 株価を読み込む銘柄数の単位。全銘柄 × 252 日を一度に載せると Lambda の
+# メモリを圧迫するため、この単位で読んでは解放する。
+_STOCK_CHUNK_SIZE = 500
+
+
+def _chunked(items: Sequence[StockEntity], size: int) -> Iterator[list[StockEntity]]:
+    """リストを size 件ずつに区切って返す。"""
+    for start in range(0, len(items), size):
+        yield list(items[start : start + size])
 
 
 @dataclass
@@ -101,8 +113,6 @@ class RecommendationUseCase:
         all_financials = self._financial_repo.find_all_latest()
         all_recent_financials = self._financial_repo.find_all_recent(limit=4)
         all_52w = self._price_repo.find_all_52w_high_low() if self._price_repo else {}
-        # レンジ計算用に 252日（約1年） + 20日ボラ計算用にも兼ねる
-        all_long_prices = self._price_repo.find_all_recent_prices(limit=252) if self._price_repo else {}
 
         # 配当データ
         stock_ids = [s.id for s in stocks if s.id is not None]
@@ -124,45 +134,54 @@ class RecommendationUseCase:
         cost_of_capital = MARKET_COST_OF_CAPITAL.get("JP", Decimal("0.10"))
         growth_rate = Decimal("0.02")  # 共通の想定成長率（screening と同じ）
 
-        for stock in stocks:
-            if stock.id is None or stock.latest_price is None:
-                continue
-
-            financial = all_financials.get(stock.id)
-            recent_financials = all_recent_financials.get(stock.id, [])
-            recent_prices = all_long_prices.get(stock.id, [])
-
-            # ----- 長期保有候補 -----
-            lt = self._evaluate_long_term(
-                stock=stock,
-                financial=financial,
-                recent_financials=recent_financials,
-                recent_prices=recent_prices,
-                annual_total=all_annual_totals.get(stock.id),
-                dividends=all_dividends.get(stock.id, []),
-                cost_of_capital=cost_of_capital,
-                growth_rate=growth_rate,
+        # 株価はレンジ計算用に 252 日（約1年）分必要で、全銘柄をまとめて読むと
+        # 銘柄数 × 日数でメモリが膨らむ。評価は 1 銘柄ごとに完結するため、
+        # 銘柄をチャンクに分けて読み、そのチャンクを処理し終えたら解放する。
+        for chunk in _chunked(stocks, _STOCK_CHUNK_SIZE):
+            chunk_ids = [s.id for s in chunk if s.id is not None]
+            chunk_prices = (
+                self._price_repo.find_all_recent_prices(limit=252, stock_ids=chunk_ids) if self._price_repo else {}
             )
-            if lt is not None:
-                long_term_candidates.append(lt)
 
-            # ----- デイトレ候補 -----
-            dt = self._evaluate_day_trade(
-                stock=stock,
-                recent_prices=recent_prices,
-                high_low=all_52w.get(stock.id),
-            )
-            if dt is not None:
-                day_trade_candidates.append(dt)
+            for stock in chunk:
+                if stock.id is None or stock.latest_price is None:
+                    continue
 
-            # ----- レンジ候補 -----
-            rb = self._evaluate_range_bound(
-                stock=stock,
-                recent_financials=recent_financials,
-                recent_prices=recent_prices,
-            )
-            if rb is not None:
-                range_candidates.append(rb)
+                financial = all_financials.get(stock.id)
+                recent_financials = all_recent_financials.get(stock.id, [])
+                recent_prices = chunk_prices.get(stock.id, [])
+
+                # ----- 長期保有候補 -----
+                lt = self._evaluate_long_term(
+                    stock=stock,
+                    financial=financial,
+                    recent_financials=recent_financials,
+                    recent_prices=recent_prices,
+                    annual_total=all_annual_totals.get(stock.id),
+                    dividends=all_dividends.get(stock.id, []),
+                    cost_of_capital=cost_of_capital,
+                    growth_rate=growth_rate,
+                )
+                if lt is not None:
+                    long_term_candidates.append(lt)
+
+                # ----- デイトレ候補 -----
+                dt = self._evaluate_day_trade(
+                    stock=stock,
+                    recent_prices=recent_prices,
+                    high_low=all_52w.get(stock.id),
+                )
+                if dt is not None:
+                    day_trade_candidates.append(dt)
+
+                # ----- レンジ候補 -----
+                rb = self._evaluate_range_bound(
+                    stock=stock,
+                    recent_financials=recent_financials,
+                    recent_prices=recent_prices,
+                )
+                if rb is not None:
+                    range_candidates.append(rb)
 
         # スコア降順 → 上位 _TOP_N
         long_term_candidates.sort(key=lambda x: x[0], reverse=True)

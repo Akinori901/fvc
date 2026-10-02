@@ -407,13 +407,20 @@ components:
         # ドメインを共有することを要求するため、Cognito の OAuth エンドポイントを
         # CloudFront 経由で公開している (terraform/cloudfront.tf の cognito-hosted-ui origin)。
         #
-        # authorizationUrl に `identity_provider=Google` を付与しているのは、Cognito
-        # Hosted UI の「Continue with Google」ボタンをスキップして直接 Google OAuth
-        # consent 画面に遷移させるため。ChatGPT 利用ユーザーは Google アカウントで
-        # 招待されることを前提とし、Cognito email/password ログインは Web 画面側で
-        # 利用する想定。
+        # authorizationUrl にクエリ文字列を含めてはならない。
+        # OAuth クライアント (ChatGPT Custom GPT を含む) は authorizationUrl に
+        # `?client_id=...` を連結するため、ここに `?identity_provider=Google` が
+        # 付いていると `?` が二重になり、Cognito が
+        # `identity_provider=Google?client_id=...` を単一の値として解釈して
+        # `error=Required parameters missing` を返す。認可コードが発行されず、
+        # 結果として ChatGPT は Authorization ヘッダ無しで API を呼び、全ツールが
+        # 401 になる (2026-09-07 の障害)。
+        #
+        # Google ログインへの直行 (Cognito Hosted UI の「Continue with Google」
+        # ボタンのスキップ) は CloudFront Function 側で `identity_provider=Google`
+        # を注入して実現する (terraform/cloudfront.tf の oauth_idp_injection)。
         authorizationCode:
-          authorizationUrl: https://YOUR_CLOUDFRONT_DOMAIN.cloudfront.net/oauth2/authorize?identity_provider=Google
+          authorizationUrl: https://YOUR_CLOUDFRONT_DOMAIN.cloudfront.net/oauth2/authorize
           tokenUrl: https://YOUR_CLOUDFRONT_DOMAIN.cloudfront.net/oauth2/token
           scopes:
             openid: ID token

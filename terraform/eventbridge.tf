@@ -523,10 +523,11 @@ resource "aws_scheduler_schedule" "compute_movers_evening" {
 }
 
 # =============================================================================
-# おすすめスナップショット生成（平日 9:00 JST）
+# おすすめスナップショット生成（平日 6:30 JST）
 #
-# 朝の株価補完同期(8:00)の完了後に実行することで、最新の株価ベースで
-# 推奨銘柄を再計算する。重い処理(約40秒)のため API Gateway 経由ではなく、
+# 参照するのは前営業日までの確定データ（当日分の sync_prices は 17:30）で、
+# find_all_recent_prices も DB 上の最新日を起点にするため、実行時刻を変えても
+# 出力は変わらない。重い処理(約40秒)のため API Gateway 経由ではなく、
 # Worker Lambda で直接実行→DBに保存するスナップショット方式を採る。
 # =============================================================================
 
@@ -534,12 +535,15 @@ resource "aws_scheduler_schedule" "generate_recommendations_daily" {
   name       = "${var.project_name}-generate-recommendations-daily"
   group_name = aws_scheduler_schedule_group.sync.name
 
-  schedule_expression          = "cron(0 9 ? * MON-FRI *)"
+  # 寄り付き（9:00）は API アクセスが集中し、8:45 の generate_screening_snapshot
+  # とも 15 分しか離れていなかったため早朝に寄せた。
+  # 窓は 6:30-6:45 に収め、7:00 の sync_prices US と重ならないようにする。
+  schedule_expression          = "cron(30 6 ? * MON-FRI *)"
   schedule_expression_timezone = "Asia/Tokyo"
 
   flexible_time_window {
     mode                      = "FLEXIBLE"
-    maximum_window_in_minutes = 30
+    maximum_window_in_minutes = 15
   }
 
   target {
