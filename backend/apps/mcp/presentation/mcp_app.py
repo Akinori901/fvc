@@ -32,7 +32,7 @@ _ALLOWED_HOSTS = [
     "127.0.0.1:8000",
     "127.0.0.1:18000",
     "backend:8000",
-    "d3dz1e2hexhvbr.cloudfront.net",
+    "YOUR_CLOUDFRONT_DOMAIN.cloudfront.net",
 ]
 
 mcp_server = FastMCP(

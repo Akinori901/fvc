@@ -75,7 +75,7 @@ variable "google_oauth_client_secret" {
 # Cognito 招待メール (admin_create_user 経由) の本文中に埋め込むログイン URL。
 # CloudFront ドメインを直接参照すると aws_cognito_user_pool → CloudFront →
 # aws_cognito_user_pool_domain → aws_cognito_user_pool の循環が起きるため変数化する。
-# 本番は CloudFront ドメイン (例: https://d3dz1e2hexhvbr.cloudfront.net/login) を
+# 本番は CloudFront ドメイン (例: https://YOUR_CLOUDFRONT_DOMAIN.cloudfront.net/login) を
 # terraform.tfvars で渡す想定。独自ドメイン適用後は差し替えれば良い。
 variable "app_login_url" {
   description = "Login URL shown in Cognito invite emails (e.g. https://<cloudfront>/login)"

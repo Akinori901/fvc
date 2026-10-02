@@ -135,7 +135,7 @@ verify-mcp: ## MCPサーバの21ツールを検証 (FVC_MCP_URL/FVC_MCP_API_KEY 
 		echo "ERROR: FVC_MCP_API_KEY 環境変数 が未設定です"; \
 		echo "  例: export FVC_MCP_API_KEY=fvc_mcp_xxxxx"; \
 		echo "  例: export FVC_MCP_URL=http://backend:8000/mcp/  (Docker 内から)"; \
-		echo "  例: export FVC_MCP_URL=https://d3dz1e2hexhvbr.cloudfront.net/mcp/  (本番)"; \
+		echo "  例: export FVC_MCP_URL=https://YOUR_CLOUDFRONT_DOMAIN.cloudfront.net/mcp/  (本番)"; \
 		exit 1; \
 	fi
 	docker compose exec \

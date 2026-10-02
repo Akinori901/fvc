@@ -301,8 +301,14 @@ class PriceRepository(ABC):
         ...
 
     @abstractmethod
-    def find_all_recent_prices(self, limit: int = 25) -> dict[int, list[PriceEntity]]:
-        """全銘柄の直近N日の株価を一括取得。{stock_id: [PriceEntity, ...]}（日付降順）"""
+    def find_all_recent_prices(
+        self, limit: int = 25, stock_ids: Sequence[int] | None = None
+    ) -> dict[int, list[PriceEntity]]:
+        """直近N日の株価を一括取得。{stock_id: [PriceEntity, ...]}（日付降順）
+
+        stock_ids を渡すとその銘柄だけを返す。全銘柄 × 長期間を一度に読むと
+        Lambda のメモリを圧迫するため、呼び出し側で分割して読むのに使う。
+        """
         ...
 
 

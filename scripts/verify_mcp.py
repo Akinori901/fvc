@@ -9,7 +9,7 @@ Claude Desktop と同じ MCP クライアント SDK で接続し、21 ツール�
     python scripts/verify_mcp.py --url http://localhost:18000/mcp/ --api-key fvc_mcp_xxx
 
     # 本番
-    python scripts/verify_mcp.py --url https://d3dz1e2hexhvbr.cloudfront.net/mcp/ --api-key fvc_mcp_xxx
+    python scripts/verify_mcp.py --url https://YOUR_CLOUDFRONT_DOMAIN.cloudfront.net/mcp/ --api-key fvc_mcp_xxx
 
     # 環境変数経由
     export FVC_MCP_URL=http://localhost:18000/mcp/
